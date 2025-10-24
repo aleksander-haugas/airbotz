@@ -1,24 +1,26 @@
-# 🧠 Airbotz IDS
+# Airbotz – Intrusion Detection & Prevention System for FreeBSD
 
-**Airbotz** is a lightweight Intrusion Detection System (IDS) designed specifically for **FreeBSD**, with native integration into the **PF (Packet Filter)** firewall and traffic capture through **pflog** and **tcpdump**.  
-Its goal is to detect abnormal network behavior in real time — such as *port scans*, *SYN floods*, *UDP floods*, or *ICMP floods* — without requiring external dependencies or additional kernel modules.
+![Airbotz](https://img.shields.io/badge/Status-Active-brightgreen) ![Language C](https://img.shields.io/badge/Language-C-blue)
+
+**Airbotz** is an **Intrusion Detection & Prevention System (IDS/IPS)** specifically designed for **FreeBSD**, optimized to work with **PF (Packet Filter)**, protecting servers from network attacks, brute force attempts, and malicious activity across SSH, FTP, Nginx, and Minecraft services.
 
 ---
 
-## 🚀 Features
+## Key Features
 
-- 📡 **Native PF integration** through `pflog0`.
-- ⚙️ **High-performance C parser**, optimized with `libpcap` and `pthread`.
-- 🔍 Detection of:
-  - Port scans
-  - SYN floods
-  - UDP floods
-  - ICMP floods
-- 📊 Persistent state tracking in `/var/db/airbotz/`.
-- 🧩 Rule-based configuration (`airzox.conf`) with per-event thresholds.
-- 🔥 Modular integration via `rules.c` for applying *bans*, *watchlists*, or *custom actions*.
-- 🧱 Designed for **FreeBSD Hardened** environments (no unsafe dependencies).
-- 🪶 Extremely low resource usage (<5MB RAM while running).
+* Native integration with **PF/pflog** for real-time protection.
+* Detection of **port scans, SYN/UDP floods, ICMP floods**, and other network anomalies.
+* Service-level protection:
+
+  * **SSH / SFTP** – failed logins, invalid users, suspicious disconnects
+  * **FTP** – failed logins, anonymous access, suspicious uploads/downloads
+  * **Nginx / Web** – brute force, SQL injection, XSS, directory scanning, data exfiltration
+  * **Minecraft** – login failures, chat spam, block break/place floods
+* **Configurable rule system** with thresholds, time windows, action types, and ban durations.
+* **Temporary and permanent ban management** with automatic escalation logic.
+* **Smart counters** to prevent premature bans and detect recurrences.
+* Detailed logging at `/var/log/airbotz.log`.
+* Low resource usage (<10MB RAM, near-zero CPU when idle).
 
 ---
 
@@ -58,7 +60,7 @@ service pflog start
 3. **Install binaries:**
 
    ```bash
-   sudo make install
+   make install
    ```
 
    This will install the following files:
@@ -74,10 +76,10 @@ service pflog start
 4. **Set proper permissions:**
 
    ```bash
-   sudo chown root:wheel /usr/local/bin/airbotz
-   sudo chmod 755 /usr/local/bin/airbotz
-   sudo mkdir -p /var/db/airbotz /var/log/airbotz
-   sudo chmod 700 /var/db/airbotz
+   chown root:wheel /usr/local/bin/airbotz
+   chmod 755 /usr/local/bin/airbotz
+   mkdir -p /var/db/airbotz /var/log/airbotz
+   chmod 700 /var/db/airbotz
    ```
 
 ---
@@ -99,6 +101,15 @@ Each line defines:
 ```
 service   event_type   attempt_threshold   time_window   action   ban_duration
 ```
+
+**Available actions:**
+
+* `ban_temp` – Temporary ban
+* `ban_perm` – Permanent ban
+* `alert_only` – Only alert
+* `log_only` – Only log
+* `watchlist` – Monitor suspicious activity
+
 
 ---
 
@@ -124,6 +135,13 @@ service   event_type   attempt_threshold   time_window   action   ban_duration
 
 ---
 
+## Escalation Logic
+
+* If an IP repeatedly hits the threshold, **temporary bans are automatically promoted to permanent**.
+* Permanent bans are never overwritten by temporary bans.
+
+---
+
 ## 🧩 PF Integration
 
 To ensure proper packet capture on `pflog0`, make sure you have rules with the `log` keyword enabled in `/etc/pf.conf`:
@@ -138,8 +156,15 @@ pass out all keep state
 Then reload your PF rules:
 
 ```bash
-sudo pfctl -f /etc/pf.conf
+pfctl -f /etc/pf.conf
 ```
+
+* Banned IPs are automatically added to PF tables:
+
+  * Temporary: `airbotz_temp`
+  * Permanent: `airbotz_perm`
+
+* Temporary bans expire automatically, and PF tables are synchronized at startup.
 
 ---
 
@@ -173,6 +198,13 @@ clang-format -i src/*.c include/*.h
 ```
 
 ---
+
+## Contributing
+
+1. Fork the repository.
+2. Create a branch for your feature: `git checkout -b my-feature`
+3. Commit your changes: `git commit -am 'Add new feature'`
+4. Submit a pull request.
 
 ## ⚡ License
 
