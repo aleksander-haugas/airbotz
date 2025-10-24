@@ -4,7 +4,7 @@
 # Detiene, limpia, recompila y reinicia el servicio con logs purgados.
 # ==============================================================================
 
-AIRBOTZ_DIR="/home/warbotz/airbotz"
+AIRBOTZ_DIR="/airbotz"
 STATE_FILE="/var/db/airbotz/state.dat"
 CONSOLE_LOG_FILE="/var/log/airbotz.log"
 PANEL_LOG_FILE="/var/log/airbotz_alerts.json"
