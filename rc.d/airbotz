@@ -1,0 +1,36 @@
+#!/bin/sh
+
+# PROVIDE: airbotz
+# REQUIRE: DAEMON
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="airbotz"
+rcvar=airbotz_enable
+pidfile="/var/run/${name}.pid"
+command="/usr/local/sbin/airbotz"
+
+load_rc_config $name   # <--- Mover esta línea aquí 👈
+
+command_args="${airbotz_args}"
+procname="/usr/local/sbin/airbotz"
+start_cmd="${name}_start"
+stop_cmd="${name}_stop"
+
+airbotz_start() {
+    echo "Iniciando airbotz con args: ${command_args}"
+    daemon -c -p ${pidfile} -o /var/log/airbotz.log ${command} ${command_args}
+}
+
+airbotz_stop() {
+    if [ -f "${pidfile}" ]; then
+        kill $(cat ${pidfile}) 2>/dev/null && rm -f ${pidfile}
+        echo "airbotz detenido."
+    else
+        echo "airbotz no está corriendo."
+    fi
+}
+
+run_rc_command "$1"
+

@@ -1,0 +1,4 @@
+Airbotz es un daemon ligero en C para FreeBSD que monitoriza en tiempo real
+los logs de Nginx utilizando kqueue, generando alertas en formato JSON
+para su posterior análisis en dashboards o sistemas de seguridad.
+
