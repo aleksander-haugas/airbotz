@@ -120,9 +120,9 @@ int main(int argc, char *argv[]) {
     /* Logs según argumentos */
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "nginx") == 0) {
-            add_log("/jails/www/var/log/nginx/access.log", parse_nginx_line);
+            add_log("/var/log/nginx/access.log", parse_nginx_line);
         } else if (strcmp(argv[i], "vsftpd") == 0) {
-            add_log("/jails/hosting/var/log/vsftpd.log", parse_vsftpd_line);
+            add_log("/var/log/vsftpd.log", parse_vsftpd_line);
         } else if (strcmp(argv[i], "sshd") == 0) {
             add_log("/var/log/auth.log", parse_sshd_line);
         } else if (strcmp(argv[i], "pflog") == 0) { // NUEVA INTEGRACIÓN
