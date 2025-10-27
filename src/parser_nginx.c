@@ -43,9 +43,7 @@ static void json_escape(const char *input, char *output, size_t out_size) {
 /* ---------- write_alert_enriched (Simplificado para monitoreo externo) ---------- */
 // Escribe un log JSON enriquecido. Se llama por el parser para enviar informacin
 // a un monitor externo/UI, mientras que rules_handle_action gestiona la accin.
-static inline void write_alert_enriched(const char *event, const char *ip,
-                                        const char *method, const char *uri,
-                                        int status, const char *ua) {
+static inline void write_alert_enriched(const char *event, const char *ip, const char *method, const char *uri, int status, const char *ua) {
     time_t now = time(NULL);
     char ts[64];
     strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S%z", localtime(&now));
@@ -66,9 +64,7 @@ static inline void write_alert_enriched(const char *event, const char *ip,
     fclose(out);
 }
 
-
 /* ---------- Utilidades para parseo ---------- */
-
 /* extrae primer token separado por espacios */
 static void first_token(const char *s, char *out, size_t outsz) {
     size_t i = 0;
@@ -138,10 +134,98 @@ static void extract_ua(const char *s, char *ua, size_t usz) {
     }
 }
 
-/* --- Los structs y funciones de contadores internos (ip_entry, hash_table, etc.) han sido eliminados --- */
+// ===================== Detection Helpers =============================
+// =====================================================================
 
-/* ---------- detection helpers (pattern checks) ---------- */
+/* ==================== Legit Bot Helper ===================== */
+// Evita falsos positivos al ignorar user-agents de bots conocidos y confiables.
+// Retorna 1 si es un bot legítimo, 0 en caso contrario.
+// Se puede ampliar la lista según sea necesario.
+// Actualmente incluye bots populares como Googlebot, Bingbot, UptimeRobot, etc.
+// También evita ignorar bots falsos que usan nombres válidos sin detalles.
+// TODO: hacer un reverse DNS para validar bots importantes (Google, Bing).
+static int is_legit_bot(const char *ua) {
+    if (!ua || !*ua) return 0;
 
+    const char *trusted_bots[] = {
+        "UptimeRobot", "Googlebot", "Bingbot", "AhrefsBot",
+        "SemrushBot", "DuckDuckBot", "YandexBot", "MJ12bot",
+        "DotBot", "PetalBot", "GPTBot", "facebookexternalhit",
+        "Slackbot-LinkExpanding", "TelegramBot", NULL
+    };
+
+    // Detección exacta
+    for (int i = 0; trusted_bots[i]; i++) {
+        if (strcasestr(ua, trusted_bots[i])) return 1;
+    }
+
+    // Excepciones: algunos bots fake usan nombres válidos pero sin dominio o versión
+    // Evitamos ignorarlos si son sospechosos (ej: "Googlebot" sin "(compatible; ...)")
+    if (strcasestr(ua, "bot") && !strstr(ua, "http")) return 0;
+
+    return 0;
+}
+
+/* ==================== LFI Detection Helper ===================== */
+// Retorna 1 si la cadena contiene patrones asociados a LFI.
+// Retorna 0 en caso contrario.
+// Estos patrones incluyen traversal directory, archivos sensibles,
+// y combinaciones comunes usadas en ataques LFI.
+static int contains_lfi_pattern(const char *s) {
+    if (!s) return 0;
+
+    const char *patterns[] = {
+        "../", "..\\", "%2e%2e%2f", "%252e%252e%252f", // traversal
+        "/etc/passwd", "/proc/self/environ", "/proc/version",
+        "/var/www", "/boot.ini", "/windows/win.ini",
+        "file=", "path=", "page=", "include=", "template=", "load=",
+        NULL
+    };
+
+    for (int i = 0; patterns[i]; i++) {
+        if (strcasestr(s, patterns[i])) return 1;
+    }
+
+    // Detección combinada: parámetro + extensión sospechosa
+    if ((strcasestr(s, "file=") || strcasestr(s, "path=")) &&
+        (strcasestr(s, ".php") || strcasestr(s, ".inc") || strcasestr(s, ".jsp"))) {
+        return 1;
+    }
+
+    return 0;
+}
+
+/* ==================== RCE Detection Helper ===================== */
+// Retorna 1 si la cadena contiene patrones asociados a RCE.
+// Retorna 0 en caso contrario.
+// Estos patrones incluyen funciones peligrosas, comandos del sistema,
+// y rutas comunes usadas en ataques de ejecución remota de código. 
+// También incluye operadores de shell y técnicas de ofuscación.
+// Se puede ampliar la lista según sea necesario.
+static int contains_rce_pattern(const char *s) {
+    if (!s) return 0;
+
+    const char *patterns[] = {
+        "system(", "exec(", "shell_exec(", "passthru(", "popen(", "proc_open(",
+        "base64_decode(", "eval(", "assert(", "preg_replace(/e", "gzuncompress(",
+        ";", "&&", "|", "%26%26", "%3B", "%7C",
+        "wget ", "curl ", "bash -c", "perl -e", "python -c", "php -r",
+        "/tmp/", "/dev/shm/", "cmd.php", "upload.php",
+        NULL
+    };
+
+    for (int i = 0; patterns[i]; i++) {
+        if (strcasestr(s, patterns[i])) return 1;
+    }
+
+    return 0;
+}
+
+/* ==================== Login Endpoint Helper ===================== */
+// Retorna 1 si la URI es un endpoint de login común.
+// Retorna 0 en caso contrario.
+// Incluye rutas típicas de login en CMS populares y aplicaciones web.
+// Se puede ampliar la lista según sea necesario.
 static int is_login_endpoint(const char *uri) {
     if (!uri) return 0;
     const char *login_paths[] = {
@@ -153,6 +237,12 @@ static int is_login_endpoint(const char *uri) {
     return 0;
 }
 
+/* ==================== SQLi Detection Helper ===================== */
+// Retorna 1 si la cadena contiene patrones asociados a SQLi.
+// Retorna 0 en caso contrario.
+// Estos patrones incluyen palabras clave SQL, operadores lógicos,
+// funciones de tiempo, y técnicas de ofuscación comunes en ataques SQLi.
+// Se puede ampliar la lista según sea necesario.
 static int contains_sqli_pattern(const char *s) {
     if (!s) return 0;
     const char *patterns[] = {
@@ -165,6 +255,12 @@ static int contains_sqli_pattern(const char *s) {
     return 0;
 }
 
+/* ==================== XSS Detection Helper ===================== */
+// Retorna 1 si la cadena contiene patrones asociados a XSS.
+// Retorna 0 en caso contrario.
+// Estos patrones incluyen etiquetas HTML y atributos comúnmente usados
+// en ataques de Cross-Site Scripting (XSS).
+// Se puede ampliar la lista según sea necesario.
 static int contains_xss_pattern(const char *s) {
     if (!s) return 0;
     if (strcasestr(s, "<script")) return 1;
@@ -176,7 +272,6 @@ static int contains_xss_pattern(const char *s) {
 }
 
 /* ===================== Listas para paths sensibles / patterns ===================== */
-
 static const char *sensitive_files[] = {
     "/.env", "/.htaccess", "/.htpasswd", "/phpinfo.php", "/config.php",
     "/wp-config.php", "/database.yml", "/settings.py", "/localsettings.py",
@@ -242,10 +337,7 @@ static int has_extension(const char *uri, const char *const list[]) {
     return 0;
 }
 
-/* --- La lgica de ScanEntry y ScanEntry ha sido eliminada --- */
-
 /* ---------- main parser (exposed) ---------- */
-
 /* parse lines like: <ip> - - [time] "METHOD URI HTTP/1.1" status size "ref" "ua" */
 void parse_nginx_line(const char *line) {
     if (!line || !line[0]) return;
@@ -262,6 +354,10 @@ void parse_nginx_line(const char *line) {
     char ua[MAX_UASAMPLE] = {0};
     extract_ua(line, ua, sizeof(ua));
 
+    // Ignorar bots legítimos para evitar falsos positivos
+    if (is_legit_bot(ua)) {
+        return;
+    }
 
     /*
      * REGLA 0: Hit a un path sensible / conocido de ataque
@@ -272,18 +368,18 @@ void parse_nginx_line(const char *line) {
         matches_list(uri, known_vuln_endpoints) ||
         has_extension(uri, backup_extensions)) {
         
-        // Reportar el evento, rules.c gestiona el conteo y la accin
+        // Se registra cada solicitud normal, el conteo temporal lo maneja rules.c
         rules_handle_action("nginx", "sensitive_path_hit", ip, line);
         write_alert_enriched("sensitive_path_hit", ip, method, uri, status, ua);
     }
 
-
     /*
      * REGLA 1: Fuerza bruta (login_attempt)
      * Evento: login_attempt
+     * Puede dar falsos positivos segun la plataforma
      */
     if (strcasecmp(method, "POST") == 0 && is_login_endpoint(uri)) {
-        // Reportar el evento, rules.c gestiona el conteo y la accin
+        // Se registra cada solicitud normal, el conteo temporal lo maneja rules.c
         rules_handle_action("nginx", "login_attempt", ip, line);
         write_alert_enriched("login_attempt", ip, method, uri, status, ua);
     }
@@ -293,7 +389,7 @@ void parse_nginx_line(const char *line) {
      * Evento: sql_injection_attempt
      */
     if (contains_sqli_pattern(uri) || contains_sqli_pattern(ua)) {
-        // Reportar el evento, rules.c gestiona el conteo y la accin
+        // Se registra cada solicitud normal, el conteo temporal lo maneja rules.c
         rules_handle_action("nginx", "sql_injection_attempt", ip, line);
         write_alert_enriched("sql_injection_attempt", ip, method, uri, status, ua);
     }
@@ -303,18 +399,17 @@ void parse_nginx_line(const char *line) {
      * Evento: xss_attempt
      */
     if (contains_xss_pattern(uri) || contains_xss_pattern(ua)) {
-        // Reportar el evento, rules.c gestiona el conteo y la accin
+        // Se registra cada solicitud normal, el conteo temporal lo maneja rules.c
         rules_handle_action("nginx", "xss_attempt", ip, line);
         write_alert_enriched("xss_attempt", ip, method, uri, status, ua);
     }
-
 
     /*
      * REGLA 4: Fuzzing / High 404 Rate
      * Evento: 404_hit
      */
     if (status == 404) {
-        // Reportar el evento, rules.c gestiona el conteo y la accin
+        // Se registra cada solicitud normal, el conteo temporal lo maneja rules.c
         rules_handle_action("nginx", "404_hit", ip, line);
         write_alert_enriched("404_hit", ip, method, uri, status, ua);
     } 
@@ -324,8 +419,41 @@ void parse_nginx_line(const char *line) {
      * Evento: 4xx_hit
      */
     else if (status >= 400 && status < 500) {
-        // Reportar el evento, rules.c gestiona el conteo y la accin
+        // Se registra cada solicitud normal, el conteo temporal lo maneja rules.c
         rules_handle_action("nginx", "4xx_hit", ip, line);
         write_alert_enriched("4xx_hit", ip, method, uri, status, ua);
     }
+
+    /*
+     * REGLA 6: Local File Inclusion
+     * Evento: lfi_attempt
+     */
+    if (contains_lfi_pattern(uri)) {
+        // Se registra cada solicitud normal, el conteo temporal lo maneja rules.c
+        rules_handle_action("nginx", "lfi_attempt", ip, line);
+        write_alert_enriched("lfi_attempt", ip, method, uri, status, ua);
+    }
+
+    /*
+     * REGLA 7: Remote Code Execution
+     * Evento: rce_attempt
+     * Puede dar falsos positivos, pero es crítico detectar.
+     */
+    if (contains_rce_pattern(uri) || contains_rce_pattern(ua)) {
+        // Se registra cada solicitud normal, el conteo temporal lo maneja rules.c
+        rules_handle_action("nginx", "rce_attempt", ip, line);
+        write_alert_enriched("rce_attempt", ip, method, uri, status, ua);
+    }
+
+    /*
+    * REGLA 8: Flood básico (muchas peticiones en poco tiempo)
+    * Evento: http_flood
+    * Solo detecta POST o GET repetidos con frecuencia anormal.
+    */
+    if (strcasecmp(method, "GET") == 0 || strcasecmp(method, "POST") == 0) {
+        // Se registra cada solicitud normal, el conteo temporal lo maneja rules.c
+        rules_handle_action("nginx", "http_flood", ip, line);
+        write_alert_enriched("http_flood", ip, method, uri, status, ua);
+    }
+
 }
