@@ -1,5 +1,11 @@
 # Airbotz – Intrusion Detection & Prevention System for FreeBSD
 
+**IMPORTANT**. This is for testing and development, it's not cleaned i'm only throwing my ideas
+and maybe this repository is outdated until i upload some new piece of code, also little bit older, so feel to free to use but please not in production, a lot of false positives and maybe can block your entire network. 
+
+Tested and testing:
+OS: FreeBSD, ZFS, PF, Jails Friendly.
+
 ![Airbotz](https://img.shields.io/badge/Status-Active-brightgreen) ![Language C](https://img.shields.io/badge/Language-C-blue)
 
 **Airbotz** is an **Intrusion Detection & Prevention System (IDS/IPS)** specifically designed for **FreeBSD**, optimized to work with **PF (Packet Filter)**, protecting servers from network attacks, brute force attempts, and malicious activity across SSH, FTP, Nginx, Minecraft services...etc.
@@ -11,10 +17,13 @@
 * Native integration with **PF/pflog** for real-time protection.
 * Detection of **port scans, SYN/UDP floods, ICMP floods**, and other network anomalies.
 * Service-level protection:
-  * **SSH / SFTP** – failed logins, invalid users, suspicious disconnects  
-  * **FTP** – failed logins, anonymous access, suspicious uploads/downloads  
-  * **Nginx / Web** – brute force, SQL injection, XSS, directory scanning, data exfiltration  
-  * **Minecraft** – login failures, chat spam, block flood attempts
+  * **SSH / server** – failed logins, invalid users, suspicious disconnects  
+  * **FTP / server** – failed logins, anonymous access, suspicious uploads/downloads  
+  * **SFTP / server** – failed logins, anonymous access, suspicious uploads/downloads  
+  * **Nginx / Web** – brute force, SQL injection, XSS, directory scanning, data exfiltrationy
+  * **Apache / Web** – brute force, SQL injection, XSS, directory scanning, data exfiltration  
+  * **Minecraft / server** – login failures, chat spam, block flood attempts
+  * **Nakama / server** – login failures, chat spam, block flood attempts, fake sessions
 * **Configurable rule system** with thresholds, time windows, action types, and ban durations.
 * **Temporary and permanent ban management** with automatic escalation.
 * **Smart counters** to prevent false positives and detect repeated offenders.
@@ -207,8 +216,8 @@ When Airbotz bans an IP, you’ll see:
 
 ```
 # pfctl -t airbotz_temp -T show
-185.237.102.51
-176.67.81.228
+185.xxx.xxx.xxx
+176.xxx.xxx.xxx
 ```
 
 Temporary bans expire automatically, and PF tables are synchronized on startup.
@@ -226,7 +235,7 @@ pfctl -t airbotz_temp -T flush
 Remove a specific IP:
 
 ```bash
-pfctl -t airbotz_perm -T delete 203.0.113.25
+pfctl -t airbotz_perm -T delete xxx.xxx.xxx.xxx
 ```
 
 Clear both tables:

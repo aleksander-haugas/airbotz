@@ -1,15 +1,31 @@
+/* 
+    main.c
+    Main source file for Airbotz IDS/IPS
+    =========================================================================
+    This file contains the main loop for monitoring log files
+    and handling signals for graceful shutdown.
+    It uses kqueue for efficient file monitoring on FreeBSD systems.
+*/
+
+// Headers estándar
+// =========================================================================
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
 #include <sys/types.h>
-#include <sys/event.h>
-#include <sys/time.h>
 #include <signal.h>
 #include <sys/stat.h>
 
+// Headers para Kqueue en FreeBSD
+// =========================================================================
+#include <unistd.h>
+#include <sys/event.h>
+#include <sys/time.h>
+
+// Headers for Airbotz project
+// =========================================================================
 #include "../include/state_manager.h"
 #include "../include/parser_nginx.h"
 #include "../include/parser_vsftpd.h"
@@ -22,9 +38,9 @@ void show_status(void);
 int actions_main(void); // modo interactivo
 
 #define READ_BUFFER_SIZE 65536    /* más grande para eficiencia */
-#define LINE_BUFFER_SIZE 4096
-#define MAX_LOGS         8
-#define MAX_EVENTS_BATCH 32
+#define LINE_BUFFER_SIZE 4096   /* tamaño máximo de línea */
+#define MAX_LOGS         8    /* máximo de logs a monitorear */
+#define MAX_EVENTS_BATCH 32     /* máximo de eventos por kevent */
 
 // Timers de Kqueue
 #define TIMER_ID_CLEANUP 1        // Timer para limpieza de estado
@@ -32,8 +48,10 @@ int actions_main(void); // modo interactivo
 #define CLEANUP_INTERVAL_MS (1 * 3600 * 1000)    // 1 hora en milisegundos
 #define INTEGRITY_INTERVAL_MS (24 * 3600 * 1000) // 24 horas en milisegundos
 
+// Control de ejecución del demonio
 static volatile sig_atomic_t keep_running = 1;
 
+/* Estructura para monitoreo de logs */
 typedef struct {
     int fd;
     char path[256];
@@ -91,6 +109,7 @@ static int add_log(const char *path, void (*parser)(const char *)) {
 
 /* ---------- Bucle principal ---------- */
 int main(int argc, char *argv[]) {
+    // Inicialización de reglas
     rules_init("/usr/local/etc/airbotz.conf", NULL);
 
     /* CLI status */
@@ -118,6 +137,10 @@ int main(int argc, char *argv[]) {
     }
 
     /* Logs según argumentos */
+    // Hay que hacerlo para leer los logs desde el config o CLI <-- Pendiente, 
+    // recuerda max 8 o necesitas cambiar los parametros.
+    // recuerda tambien de tener en cuenta el modo pflog que es especial.
+    // ej: airbotz nginx vsftpd sshd pflog minecraft nakama apache ...
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "nginx") == 0) {
             add_log("/var/log/nginx/access.log", parse_nginx_line);
@@ -131,8 +154,8 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "[airbotz] Monitoreo de PFlog iniciado.\n");
         }
     }
-    //add_log("/var/log/airbotz_alerts.json", parse_alert_json_line);
 
+    // Verificación básica
     if (watcher_count == 0 && (argc < 2 || strcmp(argv[1], "pflog") != 0)) {
         fprintf(stderr, "[airbotz] No se especificaron servicios a monitorear (o solo pflog).\n");
         if (argc < 2) return 1;
@@ -140,28 +163,31 @@ int main(int argc, char *argv[]) {
 
     int kq = kqueue();
 
-/* AÑADIR: Registro de Timers del Reloj */
-struct kevent timer_ev[2];
-int timer_count = 0;
+    /* AÑADIR: Registro de Timers del Reloj */
+    struct kevent timer_ev[2];
+    int timer_count = 0;
 
-// Timer 1: Limpieza de Contadores de Estado (cada 1 hora)
-EV_SET(&timer_ev[timer_count++], TIMER_ID_CLEANUP, EVFILT_TIMER, EV_ADD | EV_ENABLE,
-        0, CLEANUP_INTERVAL_MS, NULL);
+    // Timer 1: Limpieza de Contadores de Estado (cada 1 hora)
+    EV_SET(&timer_ev[timer_count++], TIMER_ID_CLEANUP, EVFILT_TIMER, EV_ADD | EV_ENABLE,
+            0, CLEANUP_INTERVAL_MS, NULL);
 
-// Timer 2: Auditoría de Integridad (cada 24 horas)
-EV_SET(&timer_ev[timer_count++], TIMER_ID_INTEGRITY, EVFILT_TIMER, EV_ADD | EV_ENABLE,
-        0, INTEGRITY_INTERVAL_MS, NULL);
+    // Timer 2: Auditoría de Integridad (cada 24 horas)
+    EV_SET(&timer_ev[timer_count++], TIMER_ID_INTEGRITY, EVFILT_TIMER, EV_ADD | EV_ENABLE,
+            0, INTEGRITY_INTERVAL_MS, NULL);
 
-if (kevent(kq, timer_ev, timer_count, NULL, 0, NULL) == -1) {
-    perror("kevent register timers");
-    return 1;
-}
+    // Registrar los timers
+    if (kevent(kq, timer_ev, timer_count, NULL, 0, NULL) == -1) {
+        perror("kevent register timers");
+        return 1;
+    }
 
+    // Fin de AÑADIR: Registro de Timers del Reloj */
     if (kq == -1) {
         perror("kqueue");
         return 1;
     }
 
+    // Registrar logs en kqueue
     for (int i = 0; i < watcher_count; i++) {
         struct kevent ev;
         EV_SET(&ev, watchers[i].fd, EVFILT_VNODE, EV_ADD | EV_CLEAR,
@@ -172,6 +198,7 @@ if (kevent(kq, timer_ev, timer_count, NULL, 0, NULL) == -1) {
         }
     }
 
+    // Manejo de señales
     signal(SIGTERM, handle_signal);
     signal(SIGINT, handle_signal);
 
@@ -240,6 +267,8 @@ if (kevent(kq, timer_ev, timer_count, NULL, 0, NULL) == -1) {
         close(watchers[i].fd);
     }
     close(kq);
+
+    // Limpieza final
     rules_shutdown();
     // AÑADIR: Guardar el estado persistente antes de salir
     state_manager_save();

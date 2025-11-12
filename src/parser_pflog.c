@@ -1,40 +1,75 @@
+// Headers estándar
+// =========================================================================
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <pthread.h>
 #include <time.h>
 #include <stdbool.h>
 #include <stdarg.h>
-#include <pcap/pcap.h>
-#include <net/if_pflog.h>
-#include <netinet/in.h>
-#include <netinet/ip.h>
-#include <netinet/ip6.h>
-#include <netinet/tcp.h>
-#include <netinet/udp.h>
-#include <netinet/ip_icmp.h>
-#include <arpa/inet.h>
 
+// Headers para PF y pcap en FreeBSD
+// =========================================================================
+/* 
+    So basically all this code is for FreeBSD tested only. 
+    If you want to port it to other OS, you will need to adapt the code.
+*/
+#ifdef __WIN64__
+    // Headers específicos de Windows
+    #include <windows.h>
+    #include <winsock2.h>
+    #include <ws2tcpip.h> // Para funciones de red más modernas
+    #error "This code is intended for FreeBSD systems only."
+#endif
+// Incluye solo en sistemas BSD
+#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
+    #include <unistd.h>
+    #include <pthread.h>
+    #include <pcap/pcap.h>
+    #include <net/if_pflog.h>
+    #include <netinet/in.h>
+    #include <netinet/ip.h>
+    #include <netinet/ip6.h>
+    #include <netinet/tcp.h>
+    #include <netinet/udp.h>
+    #include <netinet/ip_icmp.h>
+    #include <arpa/inet.h>
+#endif
+
+// Headers for Airbotz project
+// =========================================================================
 #include "../include/parser_pflog.h"
 #include "../include/rules.h"
 #include "../include/state_manager.h"
 
+// Configuration and constants (Check these values on your airbotz.conf)
+// =========================================================================
+/*
+    Some of this values can be configured on airbotz.conf file.
+    Check the documentation for more information.
+
+    You can adjust these values according to your needs.
+    For now this is very strict values for testing purposes.
+    and can generate a lot of false positives on busy networks.
+    or block your entire network if misconfigured.
+*/
 #define WINDOW_SEC   60     // ventana de observación (segundos)
 #define THRESHOLD    15     // puertos distintos para considerarlo escaneo
 #define MAX_EVENTS   512    // tamaño del buffer de eventos
 #define DEBUG_PFLOG  0      // 1 para debug, 0 para producción
 
+// Estructura para entradas de alertas
 typedef struct {
     uint32_t ip;
     time_t last_alert;
 } alert_entry_t;
 
+// Estructura para eventos de puertos
 typedef struct {
     uint16_t port;
     time_t ts;
 } port_event_t;
 
+// Estructura para seguimiento de escaneos por IP
 typedef struct ip_scan {
     uint32_t ip_h;
     port_event_t events[MAX_EVENTS];
@@ -53,6 +88,7 @@ static void ip_h_to_str(uint32_t ip_h, char *buf, size_t buflen) {
     inet_ntop(AF_INET, &ina, buf, buflen);
 }
 
+// Busca o crea una entrada de escaneo para una IP dada
 static ip_scan_t *scan_find_or_create(uint32_t ip_h) {
     ip_scan_t *entry = scan_list;
     while (entry) {
@@ -68,6 +104,7 @@ static ip_scan_t *scan_find_or_create(uint32_t ip_h) {
     return entry;
 }
 
+// This function removes old events from the scan entry
 static void scan_cleanup_old(ip_scan_t *entry, time_t now) {
     while (entry->count > 0) {
         size_t idx = entry->head % MAX_EVENTS;
@@ -77,6 +114,7 @@ static void scan_cleanup_old(ip_scan_t *entry, time_t now) {
     }
 }
 
+// Count unique ports in the current window
 static size_t scan_count_unique_ports(ip_scan_t *entry) {
     uint16_t seen[MAX_EVENTS];
     size_t seen_cnt = 0;
@@ -92,7 +130,7 @@ static size_t scan_count_unique_ports(ip_scan_t *entry) {
     return seen_cnt;
 }
 
-// Función para imprimir flags TCP
+// Print TCP flags as string (e.g., "S", "SA", "FPR", etc.)
 static void print_tcp_flags(uint8_t th_flags, char *buf) {
     size_t pos = 0;
     if (th_flags & TH_SYN) buf[pos++] = 'S';
@@ -120,21 +158,28 @@ static void dump_payload(const u_char *payload, size_t len) {
     }
 }
 
+// Portscan detection logic for SYN packets
 static void scan_record_syn(uint32_t ip_h, uint16_t dport) {
     time_t now = time(NULL);
 
+    // Lock the scan list
     pthread_mutex_lock(&scan_lock);
     ip_scan_t *entry = scan_find_or_create(ip_h);
     if (!entry) { pthread_mutex_unlock(&scan_lock); return; }
 
+    // Limpiar eventos viejos
     scan_cleanup_old(entry, now);
 
+    // Añadir nuevo evento
     size_t insert_idx = (entry->head + entry->count) % MAX_EVENTS;
     entry->events[insert_idx].port = dport;
     entry->events[insert_idx].ts = now;
+    
+    // Actualizar conteo
     if (entry->count < MAX_EVENTS) entry->count++;
     else entry->head = (entry->head + 1) % MAX_EVENTS;
-
+    
+    // Contar puertos únicos
     size_t unique_ports = scan_count_unique_ports(entry);
     if (unique_ports >= THRESHOLD) {
         char ipbuf[INET_ADDRSTRLEN];
@@ -155,6 +200,7 @@ static void scan_record_syn(uint32_t ip_h, uint16_t dport) {
             "portscan detected: %zu unique ports (window=%ds) ports=%u-%u",
             unique_ports, WINDOW_SEC, minp, maxp);
 
+        // call rules handler
         rules_handle_action("pflog", "portscan", ipbuf, info);
 
         /* JSON opcional */
@@ -173,10 +219,12 @@ static void scan_record_syn(uint32_t ip_h, uint16_t dport) {
         entry->count = 0;
     }
 
+    // Unlock the scan list
     pthread_mutex_unlock(&scan_lock);
 }
 
 // TCP parser común (versión con state_manager)
+// Detecta SYN sin ACK para portscan y flood
 static void decode_tcp(const u_char *payload, size_t l4_len, uint32_t src_ip_h) {
     if (l4_len < sizeof(struct tcphdr)) return;
     struct tcphdr tcph;
@@ -198,6 +246,7 @@ static void decode_tcp(const u_char *payload, size_t l4_len, uint32_t src_ip_h) 
         rules_handle_action("pflog", "syn_flood", ipbuf, "SYN packet observed");
     }
 
+    // Debug output in raw mode
     if (DEBUG_PFLOG) {
         size_t tcp_header_len = tcph.th_off * 4;
         char flags[8];
@@ -212,15 +261,15 @@ static void decode_tcp(const u_char *payload, size_t l4_len, uint32_t src_ip_h) 
 // ICMP parser
 static void decode_icmp(const u_char *payload, size_t l4_len, uint32_t src_ip_h) {
     if (l4_len < 2) return;
-#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
-    const struct icmp *icmp = (const struct icmp *)payload;
-    unsigned int type = icmp->icmp_type;
-    unsigned int code = icmp->icmp_code;
-#else
-    const struct icmphdr *icmp = (const struct icmphdr *)payload;
-    unsigned int type = icmp->type;
-    unsigned int code = icmp->code;
-#endif
+    #if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
+        const struct icmp *icmp = (const struct icmp *)payload;
+        unsigned int type = icmp->icmp_type;
+        unsigned int code = icmp->icmp_code;
+    #else
+        const struct icmphdr *icmp = (const struct icmphdr *)payload;
+        unsigned int type = icmp->type;
+        unsigned int code = icmp->code;
+    #endif
 
     char ipbuf[INET_ADDRSTRLEN];
     ip_h_to_str(src_ip_h, ipbuf, sizeof(ipbuf));
