@@ -1,4 +1,3 @@
-#define AIRBOTZ_STORAGE_TESTING
 #include "address_manager.h"
 
 #include <assert.h>
