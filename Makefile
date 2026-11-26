@@ -22,12 +22,16 @@ tests/test_pf: tests/test_pf.c src/pf/pf.c
 tests/test_pf_live: tests/test_pf_live.c src/pf/pf.c
 	$(CC) $(CFLAGS) -o $@ tests/test_pf_live.c src/pf/pf.c
 
-clean:
-	rm -f $(OBJ) airbotz tests/test_ssh tests/test_pf tests/test_pf_live
+tests/test_ssh_rotation: tests/test_ssh_rotation.c src/ssh/ssh.c src/ssh/ssh_parser.c src/logger.c
+	$(CC) $(CFLAGS) -o $@ tests/test_ssh_rotation.c src/ssh/ssh.c src/ssh/ssh_parser.c src/logger.c
 
-test: airbotz tests/test_ssh tests/test_pf
+clean:
+	rm -f $(OBJ) airbotz tests/test_ssh tests/test_pf tests/test_pf_live tests/test_ssh_rotation
+
+test: airbotz tests/test_ssh tests/test_pf tests/test_ssh_rotation
 	./tests/test_ssh
 	./tests/test_pf
+	./tests/test_ssh_rotation
 
 # Build this separately; execute with root privileges on a test FreeBSD host.
 test-pf-live: tests/test_pf_live
