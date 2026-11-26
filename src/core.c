@@ -109,6 +109,7 @@ handle_ipc_request(const char *request, char *response, size_t response_size,
         pf_valid_address(tokens[1]) && strcmp(tokens[2], "permanent") == 0) {
         int rc = address_manager_add_permanent(manager, tokens[1]);
         snprintf(response, response_size, rc == 0 ? "OK permanent address added\n" :
+                 rc == -3 ? "ERROR state changed; storage durability uncertain\n" :
                  rc == -2 ? "ERROR PF rollback failed; inspect PF and storage\n" :
                             "ERROR could not add permanent address\n");
         return rc;
@@ -117,6 +118,7 @@ handle_ipc_request(const char *request, char *response, size_t response_size,
         pf_valid_address(tokens[1]) && strcmp(tokens[2], "permanent") == 0) {
         int rc = address_manager_delete_permanent(manager, tokens[1]);
         snprintf(response, response_size, rc == 0 ? "OK permanent address removed\n" :
+                 rc == -3 ? "ERROR state changed; storage durability uncertain\n" :
                  rc == -2 ? "ERROR PF rollback failed; inspect PF and storage\n" :
                             "ERROR could not remove permanent address\n");
         return rc;
@@ -141,7 +143,8 @@ handle_ipc_request(const char *request, char *response, size_t response_size,
         {
             int rc = address_manager_add_temporary(manager, tokens[1], expiry);
             snprintf(response, response_size, rc == 0 ? "OK temporary address added\n" :
-                     rc == -2 ? "ERROR PF rollback failed; inspect PF and storage\n" :
+                     rc == -3 ? "ERROR state changed; storage durability uncertain\n" :
+                 rc == -2 ? "ERROR PF rollback failed; inspect PF and storage\n" :
                                 "ERROR could not add temporary address\n");
             return rc;
         }
@@ -150,6 +153,7 @@ handle_ipc_request(const char *request, char *response, size_t response_size,
         pf_valid_address(tokens[1]) && strcmp(tokens[2], "temporary") == 0) {
         int rc = address_manager_delete_temporary(manager, tokens[1]);
         snprintf(response, response_size, rc == 0 ? "OK temporary address removed\n" :
+                 rc == -3 ? "ERROR state changed; storage durability uncertain\n" :
                  rc == -2 ? "ERROR PF rollback failed; inspect PF and storage\n" :
                             "ERROR could not remove temporary address\n");
         return rc;
