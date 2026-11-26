@@ -62,9 +62,9 @@ int main(void)
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-        " from 192.0.2.6 port 22 ssh2\\n";
+        " from 192.0.2.6 port 22 ssh2\n";
     const char *event4 =
-        "sshd: Failed password for root from 192.0.2.7 port 22 ssh2\\n";
+        "sshd: Failed password for root from 192.0.2.7 port 22 ssh2\n";
     int fd;
 
     assert(mkdtemp(dir) != NULL);
