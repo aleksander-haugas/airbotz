@@ -150,7 +150,7 @@ ipc_process(void)
     {
         struct pollfd pfd;
         size_t used = 0;
-        int ready;
+        int ready, complete = 0;
         pfd.fd = client_fd;
         pfd.events = POLLIN;
         while (used < sizeof(request) - 1) {
@@ -174,10 +174,11 @@ ipc_process(void)
                     return 0;
                 }
                 *newline = '\0';
+                complete = 1;
                 break;
             }
         }
-        if (used == sizeof(request) - 1 && request[used - 1] != '\n') {
+        if (!complete) {
             close(client_fd);
             return 0;
         }
