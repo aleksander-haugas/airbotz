@@ -4,7 +4,7 @@ Minimal FreeBSD security daemon focused exclusively on PF and SSH.
 
 ## Scope
 
-- PF status inspection and safe PF table operations.
+- PF status inspection and explicit operations on separate temporary and permanent tables.
 - SSH authentication log tailing and event classification.
 - IPv4/IPv6 validation with inet_pton.
 - Small configuration, logging, signal handling and clean shutdown.
@@ -45,20 +45,26 @@ Manage the service:
     sudo service airbotz restart
     sudo service airbotz stop
 
-The rc.d integration uses FreeBSD's `rc.subr` background-process support and
-tracks the daemon with `/var/run/airbotz.pid`. AirBotz itself stays in the
-foreground; this keeps signal handling and development/testing straightforward.
-The service runs with the privileges of the rc.d launcher (normally root), which
-are needed to read protected authentication logs and administer PF when enabled.
+The rc.d integration uses FreeBSD's daemon(8) to detach the process and
+maintain /var/run/airbotz.pid. AirBotz itself stays in the foreground; this
+keeps signal handling and development/testing straightforward. The service
+runs with the privileges of the rc.d launcher (normally root), which are
+needed to read protected authentication logs and administer PF.
 
 ## Configuration and safety
 
-The SSH log path defaults to `/var/log/auth.log` on FreeBSD. Adjust paths and
-settings before enabling the service.
+The SSH log path defaults to /var/log/auth.log on FreeBSD. PF is enabled in
+the sample configuration but AirBotz does not enable PF or change firewall
+policy. It uses the existing PF tables configured in /etc/pf.conf:
 
-PF commands require suitable privileges and `pfctl`. The daemon does not enable
-PF, change firewall policy, or block addresses automatically. PF table mutations
-are available through the PF module API and are deliberately not wired to SSH events.
+- pf_temp_table=airbotz_temp
+- pf_perm_table=airbotz_perm
+
+The PF module exposes distinct add/delete operations for each table. The
+temporary table is a separate classification/storage table; entries do not
+expire automatically merely because they are in that table. Expiration
+scheduling is future work. PF table mutations are not wired to SSH events,
+so automatic blocking remains disabled.
 
 ## Design
 
