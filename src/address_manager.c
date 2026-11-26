@@ -47,15 +47,31 @@ address_manager_init(struct address_manager *m,
 int
 address_manager_restore(struct address_manager *m)
 {
-    size_t i;
-    if (!m) return -1;
+    struct storage_temporary valid[STORAGE_MAX_ENTRIES];
+    size_t i, count = 0;
+    time_t now;
+    int changed = 0;
+
+    if (!m || (now = time(NULL)) == (time_t)-1) return -1;
+    for (i = 0; i < m->temporary_count; i++) {
+        if (m->temporary[i].expires_at <= now) {
+            changed = 1;
+        } else {
+            valid[count++] = m->temporary[i];
+        }
+    }
+    if (changed) {
+        if (storage_save_temporary(valid, count) != 0) return -1;
+        memcpy(m->temporary, valid, count * sizeof(valid[0]));
+        m->temporary_count = count;
+    }
+
     if (m->pf_enabled) {
         for (i = 0; i < m->permanent_count; i++)
             if (m->ops.perm_add(m->permanent[i]) != 0)
                 return -1;
         for (i = 0; i < m->temporary_count; i++)
-            if (m->temporary[i].expires_at > time(NULL) &&
-                m->ops.temp_add(m->temporary[i].ip) != 0)
+            if (m->ops.temp_add(m->temporary[i].ip) != 0)
                 return -1;
     }
     return 0;
