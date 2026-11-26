@@ -62,6 +62,20 @@ static int storage_close_stream(FILE *stream, int stage)
     return rc;
 }
 
+static void storage_cleanup_fd(int fd)
+{
+    int saved = errno;
+    (void)close(fd);
+    errno = saved;
+}
+
+static void storage_cleanup_stream(FILE *stream)
+{
+    int saved = errno;
+    (void)fclose(stream);
+    errno = saved;
+}
+
 struct permanent_data { const char (*ips)[STORAGE_IP_LEN]; size_t count; };
 struct temporary_data { const struct storage_temporary *entries; size_t count; };
 static const char *permanent_name = "permanent.list";
@@ -87,7 +101,7 @@ static int secure_file(const char *path, int create)
     if (fd < 0) return -1;
     if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) ||
         st.st_uid != geteuid() || fchmod(fd, 0600) != 0) {
-        close(fd);
+        storage_cleanup_fd(fd);
         errno = EPERM;
         return -1;
     }
@@ -170,15 +184,15 @@ int storage_load_permanent(char ips[][STORAGE_IP_LEN], size_t capacity, size_t *
     fd = secure_file(path, 0);
     if (fd < 0) return -1;
     f = fdopen(fd, "r");
-    if (!f) { close(fd); return -1; }
+    if (!f) { storage_cleanup_fd(fd); return -1; }
     while (fgets(line, sizeof(line), f)) {
         size_t len = strlen(line);
         if (len && line[len - 1] == '\n') line[--len] = '\0';
         if (!len || len >= STORAGE_IP_LEN || !pf_valid_address(line) ||
-            used >= capacity) { fclose(f); return -1; }
+            used >= capacity) { errno = EINVAL; storage_cleanup_stream(f); return -1; }
         memcpy(ips[used++], line, len + 1);
     }
-    if (ferror(f)) { fclose(f); return -1; }
+    if (ferror(f)) { storage_cleanup_stream(f); return -1; }
     if (storage_close_stream(f, STORAGE_TEST_FAIL_READ_CLOSE) != 0) return -1;
     *count = used;
     return 0;
@@ -201,7 +215,7 @@ int storage_load_temporary(struct storage_temporary *entries, size_t capacity, s
         time_t when;
         if (sscanf(line, "%45s %31s %c", ip, expiry, &extra) != 2 ||
             !pf_valid_address(ip) || parse_expiry(expiry, &when) != 0 ||
-            used >= capacity) { fclose(f); return -1; }
+            used >= capacity) { errno = EINVAL; storage_cleanup_stream(f); return -1; }
         snprintf(entries[used].ip, sizeof(entries[used].ip), "%s", ip);
         entries[used++].expires_at = when;
     }
