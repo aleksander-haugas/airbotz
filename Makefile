@@ -2,7 +2,7 @@ PREFIX?=/usr/local
 CC?=cc
 CFLAGS+=-Iinclude -D_POSIX_C_SOURCE=200809L -std=c11 -Wall -Wextra -Wpedantic
 LDFLAGS?=
-SRC=src/main.c src/core.c src/config.c src/logger.c src/storage.c src/pf/pf.c src/ssh/ssh.c src/ssh/ssh_parser.c
+SRC=src/main.c src/core.c src/config.c src/logger.c src/storage.c src/address_manager.c src/pf/pf.c src/ssh/ssh.c src/ssh/ssh_parser.c
 OBJ=$(SRC:.c=.o)
 
 all: airbotz
@@ -28,14 +28,18 @@ tests/test_ssh_rotation: tests/test_ssh_rotation.c src/ssh/ssh.c src/ssh/ssh_par
 tests/test_storage: tests/test_storage.c src/storage.c src/pf/pf.c
 	$(CC) $(CFLAGS) -o $@ tests/test_storage.c src/storage.c src/pf/pf.c
 
-clean:
-	rm -f $(OBJ) airbotz tests/test_ssh tests/test_pf tests/test_pf_live tests/test_ssh_rotation tests/test_storage
+tests/test_address_manager: tests/test_address_manager.c src/address_manager.c src/storage.c src/pf/pf.c
+	$(CC) $(CFLAGS) -o $@ tests/test_address_manager.c src/address_manager.c src/storage.c src/pf/pf.c
 
-test: airbotz tests/test_ssh tests/test_pf tests/test_ssh_rotation tests/test_storage
+clean:
+	rm -f $(OBJ) airbotz tests/test_ssh tests/test_pf tests/test_pf_live tests/test_ssh_rotation tests/test_storage tests/test_address_manager
+
+test: airbotz tests/test_ssh tests/test_pf tests/test_ssh_rotation tests/test_storage tests/test_address_manager
 	./tests/test_ssh
 	./tests/test_pf
 	./tests/test_ssh_rotation
 	./tests/test_storage
+	./tests/test_address_manager
 
 # Build this separately; execute with root privileges on a test FreeBSD host.
 test-pf-live: tests/test_pf_live
