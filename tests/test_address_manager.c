@@ -37,7 +37,7 @@ static int t_del(const char *ip) { if (fail_temp_delete) return -1; return del_f
 int main(void)
 {
     char dir[] = "/tmp/airbotz-manager.XXXXXX";
-    struct address_manager manager, reloaded;
+    static struct address_manager manager, reloaded;
     struct address_manager_ops ops = {t_add, t_del, p_add, p_del};
     size_t expired = 0;
     time_t now = time(NULL);
