@@ -27,4 +27,9 @@ int storage_load_temporary(struct storage_temporary *entries, size_t capacity, s
 int storage_save_permanent(const char ips[][STORAGE_IP_LEN], size_t count);
 int storage_save_temporary(const struct storage_temporary *entries, size_t count);
 
+#ifdef AIRBOTZ_STORAGE_TESTING
+/* Test-only deterministic fault injection; not present in production builds. */
+void storage_test_fail_directory_fsync(int enabled);
+#endif
+
 #endif
