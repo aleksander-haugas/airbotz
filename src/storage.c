@@ -16,6 +16,14 @@
 
 static char db_dir[512];
 
+#ifdef AIRBOTZ_STORAGE_TESTING
+static int test_fail_directory_fsync;
+void storage_test_fail_directory_fsync(int enabled)
+{
+    test_fail_directory_fsync = !!enabled;
+}
+#endif
+
 struct permanent_data { const char (*ips)[STORAGE_IP_LEN]; size_t count; };
 struct temporary_data { const struct storage_temporary *entries; size_t count; };
 static const char *permanent_name = "permanent.list";
@@ -243,7 +251,12 @@ static int atomic_writer(const char *name,
 
     /* From this point onward the new file is visible: never report a
      * pre-commit failure, and callers must not roll back PF as if it were not. */
+#ifdef AIRBOTZ_STORAGE_TESTING
+    if (test_fail_directory_fsync || fsync(dirfd) != 0) {
+        if (test_fail_directory_fsync) errno = EIO;
+#else
     if (fsync(dirfd) != 0) {
+#endif
         saved = errno ? errno : EIO;
         (void)close(dirfd);
         errno = saved;
