@@ -22,6 +22,9 @@ On FreeBSD:
     make
     make test
 
+The IPC integration test runs with root privileges; when the test suite is
+run as an unprivileged user, that test reports SKIP.
+
 Run in the foreground while developing:
 
     sudo ./airbotz -c config/airbotz.conf
@@ -30,6 +33,11 @@ The daemon stays in the foreground. Control commands use its local socket:
 
     sudo ./airbotz status
     sudo ./airbotz ip list
+
+When using a non-default configuration, pass the same file to the CLI:
+
+    sudo ./airbotz -c /usr/local/etc/airbotz/airbotz.conf status
+    sudo ./airbotz -c /usr/local/etc/airbotz/airbotz.conf ip list
     sudo ./airbotz ip add 192.0.2.10 permanent
     sudo ./airbotz ip add 192.0.2.20 temporary 3600
     sudo ./airbotz ip remove 192.0.2.10 permanent
