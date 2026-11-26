@@ -13,6 +13,9 @@
 #include <time.h>
 
 static char db_dir[512];
+
+struct permanent_data { const char (*ips)[STORAGE_IP_LEN]; size_t count; };
+struct temporary_data { const struct storage_temporary *entries; size_t count; };
 static const char *permanent_name = "permanent.list";
 static const char *temporary_name = "temporary.list";
 
@@ -170,7 +173,7 @@ static int atomic_writer(const char *name,
 
 static int write_permanent(FILE *f, const void *data)
 {
-    const struct { const char (*ips)[STORAGE_IP_LEN]; size_t count; } *p = data;
+    const struct permanent_data *p = data;
     size_t i;
     for (i = 0; i < p->count; i++) {
         if (!pf_valid_address(p->ips[i]) || fprintf(f, "%s\n", p->ips[i]) < 0)
@@ -181,7 +184,7 @@ static int write_permanent(FILE *f, const void *data)
 
 static int write_temporary(FILE *f, const void *data)
 {
-    const struct { const struct storage_temporary *entries; size_t count; } *p = data;
+    const struct temporary_data *p = data;
     size_t i;
     for (i = 0; i < p->count; i++) {
         struct tm tmv;
@@ -197,14 +200,14 @@ static int write_temporary(FILE *f, const void *data)
 
 int storage_save_permanent(const char ips[][STORAGE_IP_LEN], size_t count)
 {
-    struct { const char (*ips)[STORAGE_IP_LEN]; size_t count; } data = {ips, count};
+    struct permanent_data data = {ips, count};
     if ((!ips && count) || count > STORAGE_MAX_ENTRIES) return -1;
     return atomic_writer(permanent_name, write_permanent, &data);
 }
 
 int storage_save_temporary(const struct storage_temporary *entries, size_t count)
 {
-    struct { const struct storage_temporary *entries; size_t count; } data = {entries, count};
+    struct temporary_data data = {entries, count};
     if ((!entries && count) || count > STORAGE_MAX_ENTRIES) return -1;
     return atomic_writer(temporary_name, write_temporary, &data);
 }
