@@ -8,12 +8,12 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` verified and closed.
 
 ## Phase 1 — Storage and persistence
 
-- [~] S1. Review and correct atomic replacement semantics in `src/storage.c`.
+- [x] S1. Review and correct atomic replacement semantics in `src/storage.c`. FreeBSD 15.1 validation passed on commit `ee06c2c`: clean production build, full test suite, and root-only IPC integration test.
   - [x] S1.a Identify unchecked directory-open/fsync errors.
   - [x] S1.b Identify ambiguous failure after successful rename.
-  - [~] S1.c Implement explicit result semantics: 0 = durable, -1 = not replaced, -2 = renamed but directory durability uncertain. Address Manager uses -3 for committed-but-uncertain and keeps PF/memory aligned. Commits: `044739b`, `b22f099`, `5c27940`, `690d8a3`.
-  - [~] S1.d Expanded deterministic fault injection to write-stage, flush, file-fsync, file-close, rename, directory-fsync and directory-close paths. Pre-rename tests assert the prior file remains intact; post-rename tests assert the replacement is visible with an uncertain result. Awaiting FreeBSD execution of this expanded suite.
-  - [~] S1.e Add tests proving uncertain post-rename save does not roll PF back and memory follows visible storage. Also corrected startup restore to finish reapplying live PF entries before returning the durability warning. Awaiting FreeBSD execution. Commits: `5b9e5e9`, `640447e`, `c37410c`, `41f10cc`, `0e89f0e`, `76823a9`.
+  - [x] S1.c Implement explicit result semantics: 0 = durable, -1 = not replaced, -2 = renamed but directory durability uncertain. Address Manager uses -3 for committed-but-uncertain and keeps PF/memory aligned. Commits: `044739b`, `b22f099`, `5c27940`, `690d8a3`; FreeBSD validation: `ee06c2c`.
+  - [x] S1.d Expanded deterministic fault injection to write-stage, flush, file-fsync, file-close, rename, directory-fsync and directory-close paths. Pre-rename tests assert the prior file remains intact; post-rename tests assert the replacement is visible with an uncertain result. Full suite passed on FreeBSD 15.1, commit `ee06c2c`.
+  - [x] S1.e Tests prove uncertain post-rename save does not roll PF back and memory follows visible storage. Startup restore completes reapplying live PF entries before returning the durability warning. Full suite passed on FreeBSD 15.1, commit `ee06c2c`. Commits: `5b9e5e9`, `640447e`, `c37410c`, `41f10cc`, `0e89f0e`, `76823a9`.
 - [ ] S2. Harden synchronization and error reporting for persistent files.
 - [ ] S3. Ensure consistency between storage, in-memory state, and PF on all failure paths.
 - [ ] S4. Test malformed, truncated, oversized, and corrupted persistence files.
