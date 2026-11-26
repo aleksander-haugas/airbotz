@@ -12,6 +12,11 @@
 #include <stdlib.h>
 #include <signal.h>
 
+/* FreeBSD exposes this BSD API outside strict POSIX feature profiles. */
+#if defined(__FreeBSD__)
+int getpeereid(int, uid_t *, gid_t *);
+#endif
+
 #define IPC_REQUEST_SIZE 256
 
 static int listen_fd = -1;
