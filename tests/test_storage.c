@@ -42,9 +42,9 @@ int main(void)
     {
         char uncertain[4][STORAGE_IP_LEN];
         snprintf(uncertain[0], sizeof(uncertain[0]), "203.0.113.77");
-        storage_test_fail_directory_fsync(1);
+        storage_test_fail_stage(STORAGE_TEST_FAIL_DIRECTORY_FSYNC);
         assert(storage_save_permanent((const char (*)[STORAGE_IP_LEN])uncertain, 1) == -2);
-        storage_test_fail_directory_fsync(0);
+        storage_test_fail_stage(STORAGE_TEST_FAIL_NONE);
         assert(storage_load_permanent(loaded, 4, &count) == 0 && count == 1);
         assert(strcmp(loaded[0], uncertain[0]) == 0);
     }
