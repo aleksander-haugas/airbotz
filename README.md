@@ -1,311 +1,38 @@
-# Airbotz – Intrusion Detection & Prevention System for FreeBSD
+# AirBotz
 
-**IMPORTANT**. This is for testing and development, it's not cleaned i'm only throwing my ideas
-and maybe this repository is outdated until i upload some new piece of code, also little bit older, so feel to free to use but please not in production, a lot of false positives and maybe can block your entire network. 
+Minimal FreeBSD security daemon focused exclusively on PF and SSH.
 
-Tested and testing:
-OS: FreeBSD, ZFS, PF, Jails Friendly.
+## Scope
 
-![Airbotz](https://img.shields.io/badge/Status-Active-brightgreen) ![Language C](https://img.shields.io/badge/Language-C-blue)
+- PF status inspection and safe PF table operations.
+- SSH authentication log tailing and event classification.
+- IPv4/IPv6 validation with inet_pton.
+- Small configuration, logging, signal handling and clean shutdown.
 
-**Airbotz** is an **Intrusion Detection & Prevention System (IDS/IPS)** specifically designed for **FreeBSD**, optimized to work with **PF (Packet Filter)**, protecting servers from network attacks, brute force attempts, and malicious activity across SSH, FTP, Nginx, Minecraft services...etc.
+No web panel, REST API, Nginx/FTP parsers, AI integration, generic rule engine,
+persistent ban database, or automatic blocking is included.
 
----
+## Build
 
-## 🚀 Key Features
+On FreeBSD:
 
-* Native integration with **PF/pflog** for real-time protection.
-* Detection of **port scans, SYN/UDP floods, ICMP floods**, and other network anomalies.
-* Service-level protection:
-  * **SSH / server** – failed logins, invalid users, suspicious disconnects  
-  * **FTP / server** – failed logins, anonymous access, suspicious uploads/downloads  
-  * **SFTP / server** – failed logins, anonymous access, suspicious uploads/downloads  
-  * **Nginx / Web** – brute force, SQL injection, XSS, directory scanning, data exfiltrationy
-  * **Apache / Web** – brute force, SQL injection, XSS, directory scanning, data exfiltration  
-  * **Minecraft / server** – login failures, chat spam, block flood attempts
-  * **Nakama / server** – login failures, chat spam, block flood attempts, fake sessions
-* **Configurable rule system** with thresholds, time windows, action types, and ban durations.
-* **Temporary and permanent ban management** with automatic escalation.
-* **Smart counters** to prevent false positives and detect repeated offenders.
-* Detailed logs stored at `/var/log/airbotz.log`.
-* **Extremely low resource usage** (<10MB RAM, near-zero CPU idle).
+    make
+    make test
 
----
+Run in the foreground while developing:
 
-## 🧩 Requirements
+    ./airbotz -c config/airbotz.conf
 
-- **Operating System:** FreeBSD 13.2+ / 14.x  
-- **Dependencies:**
-```bash
-libpcap
-pthread
-```
+PF commands require suitable privileges and pfctl. The daemon does not enable PF,
+change firewall policy, or block addresses automatically. PF table mutations are
+available through the PF module API and are deliberately not wired to SSH events.
 
-* **PF firewall** enabled with `pflog0` configured:
+## Configuration
 
-```bash
-echo 'pflog_enable="YES"' >> /etc/rc.conf
-service pflog start
-```
+Copy config/airbotz.conf to /usr/local/etc/airbotz/airbotz.conf and adjust paths.
+The SSH log path defaults to /var/log/auth.log on FreeBSD.
 
----
+## Design
 
-## ⚙️ Installation from GitHub
-
-1. **Clone the repository:**
-
- ```bash
- git clone https://github.com/aleksander-haugas/airbotz.git /usr/local/src/airbotz
- cd /usr/local/src/airbotz
- ```
-
-2. **Build:**
-
- ```bash
- make
- ```
-
-3. **Install binaries:**
-
- ```bash
- make install
- ```
-
- This will install the following files:
-
- ```
- /usr/local/bin/airbotz
- /usr/local/etc/airzox.conf
- /var/db/airbotz/airbotz.dat
- /var/log/airbotz_alerts.json
- /var/log/airbotz.log
- ```
-
-4. **Set proper permissions:**
-
- ```bash
- chown root:wheel /usr/local/bin/airbotz
- chmod 755 /usr/local/bin/airbotz
- mkdir -p /var/db/airbotz /var/log/airbotz
- chmod 700 /var/db/airbotz
- ```
-
----
-
-## 🔧 Basic Configuration (`/usr/local/etc/airzox.conf`)
-
-Example rule configuration:
-
-```ini
-# Service   Event                  Attempts  Time(s)  Action        Duration
-sshd        ssh_failed_login       5         300      ban_temp      600
-vsftpd      ftp_login_failed       6         600      ban_temp      900
-pflog       portscan               15        60       log_only      0
-nginx       sql_injection_attempt  10        60       ban_temp      0
-```
-
-Each line defines:
-
-```
-service   event_type   attempt_threshold   time_window   action   ban_duration
-```
-
-**Available actions:**
-
-* `ban_temp` – Temporary ban
-* `ban_perm` – Permanent ban
-* `alert_only` – Log alert only
-* `log_only` – Passive logging only
-* `watchlist` – Track without banning
-
----
-
-## ▶️ Usage
-
-Start the service manually:
-
-```bash
-service airbotz start
-```
-
-View real-time alerts:
-
-```bash
-tail -f /var/log/airbotz_alerts.json
-```
-
-Check current status:
-
-```bash
-airbotz status
-```
-
-Stop or restart:
-
-```bash
-service airbotz stop
-service airbotz restart
-```
-
----
-
-## 🧩 System Integration (rc.d)
-
-Enable automatic startup at boot:
-
-```bash
-echo 'airbotz_enable="YES"' >> /etc/rc.conf
-```
-
-Manage the daemon:
-
-```bash
-service airbotz start     # Start Airbotz
-service airbotz stop      # Stop Airbotz
-service airbotz restart   # Restart the daemon
-service airbotz status    # Show current status
-```
-
-Verify Airbotz is running:
-
-```bash
-ps aux | grep airbotz
-```
-
-Example:
-
-```
-root  9928  0.0  0.0  26000  10400  -  Ss   08:01   0:01.00  airbotz
-```
-
----
-
-## 🧱 PF Table Integration
-
-Airbotz maintains two PF tables for banned IPs:
-
-| Type           | Table name     | Description                               |
-| -------------- | -------------- | ----------------------------------------- |
-| Temporary bans | `airbotz_temp` | Automatically expires after rule duration |
-| Permanent bans | `airbotz_perm` | Persistent until manually removed         |
-
-### 1️⃣ Declare the tables in `/etc/pf.conf`
-
-```pf
-table <airbotz_temp> persist
-table <airbotz_perm> persist
-```
-
-### 2️⃣ Add rules to block banned IPs
-
-```pf
-block in quick from <airbotz_temp> to any
-block in quick from <airbotz_perm> to any
-pass out all keep state
-```
-
-### 3️⃣ Reload PF rules
-
-```bash
-pfctl -f /etc/pf.conf
-pfctl -t airbotz_temp -T show
-pfctl -t airbotz_perm -T show
-```
-
-When Airbotz bans an IP, you’ll see:
-
-```
-# pfctl -t airbotz_temp -T show
-185.xxx.xxx.xxx
-176.xxx.xxx.xxx
-```
-
-Temporary bans expire automatically, and PF tables are synchronized on startup.
-
----
-
-## 🧹 Manual Maintenance
-
-Remove all temporary bans:
-
-```bash
-pfctl -t airbotz_temp -T flush
-```
-
-Remove a specific IP:
-
-```bash
-pfctl -t airbotz_perm -T delete xxx.xxx.xxx.xxx
-```
-
-Clear both tables:
-
-```bash
-pfctl -t airbotz_temp -T flush
-pfctl -t airbotz_perm -T flush
-```
-
----
-
-## ⚡ Escalation Logic
-
-* If an IP repeatedly reaches the threshold, **temporary bans automatically escalate to permanent**.
-* **Permanent bans override** any temporary ban attempts.
-* Escalation history is tracked through smart counters.
-
----
-
-## 🧠 Example Alert Output
-
-```json
-{
-  "timestamp": "2025-10-24T18:25:43+0000",
-  "service": "pflog",
-  "event": "portscan",
-  "ip": "10.1.10.200",
-  "info": "portscan detected: 15 unique ports (window=60s)"
-}
-```
-
----
-
-## 🛠️ Development
-
-Build in debug mode:
-
-```bash
-make clean
-make DEBUG=1
-```
-
-Format code:
-
-```bash
-clang-format -i src/*.c include/*.h
-```
-
----
-
-## 🤝 Contributing
-
-1. Fork the repository.
-2. Create your feature branch: `git checkout -b my-feature`
-3. Commit your changes: `git commit -am 'Add new feature'`
-4. Push and open a Pull Request.
-
----
-
-## ⚖️ License
-
-Project licensed under **GPL v2**.
-Created for security and research environments on FreeBSD.
-
----
-
-## ❤️ Author
-
-**Airbotz**
-Developed by [@aleksander-haugas](https://github.com/aleksander-haugas)
-FreeBSD Enthusiast & Developer.
-
----
+main -> core lifecycle -> config/logger/PF/SSH modules.
+The SSH module observes and classifies; policy and enforcement are separate future work.
