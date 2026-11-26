@@ -21,6 +21,7 @@ int config_load(const char *path, struct ab_config *c) {
     snprintf(c->ssh_log, sizeof(c->ssh_log), "/var/log/auth.log");
     snprintf(c->log_file, sizeof(c->log_file), "/var/log/airbotz.log");
     snprintf(c->storage_dir, sizeof(c->storage_dir), "/var/db/airbotz");
+    snprintf(c->socket_path, sizeof(c->socket_path), "/var/run/airbotz.sock");
     snprintf(c->pf_temp_table, sizeof(c->pf_temp_table), "airbotz_temp");
     snprintf(c->pf_perm_table, sizeof(c->pf_perm_table), "airbotz_perm");
     c->poll_interval = 1;
@@ -47,6 +48,9 @@ int config_load(const char *path, struct ab_config *c) {
         } else if (!strcmp(k, "storage_dir")) {
             if (strlen(v) >= sizeof(c->storage_dir) || v[0] != '/') { fclose(f); return -1; }
             snprintf(c->storage_dir, sizeof(c->storage_dir), "%s", v);
+        } else if (!strcmp(k, "socket_path")) {
+            if (strlen(v) >= sizeof(c->socket_path) || v[0] != '/') { fclose(f); return -1; }
+            snprintf(c->socket_path, sizeof(c->socket_path), "%s", v);
         } else if (!strcmp(k, "pf_temp_table")) {
             if (strlen(v) >= sizeof(c->pf_temp_table)) { fclose(f); return -1; }
             snprintf(c->pf_temp_table, sizeof(c->pf_temp_table), "%s", v);
@@ -71,5 +75,5 @@ int config_load(const char *path, struct ab_config *c) {
     if (ferror(f)) { fclose(f); return -1; }
     fclose(f);
     return c->ssh_log[0] && c->log_file[0] && c->storage_dir[0] &&
-           c->pf_temp_table[0] && c->pf_perm_table[0] ? 0 : -1;
+           c->socket_path[0] && c->pf_temp_table[0] && c->pf_perm_table[0] ? 0 : -1;
 }
