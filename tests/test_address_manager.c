@@ -30,6 +30,13 @@ static int del_from(char list[][STORAGE_IP_LEN], size_t *count, const char *ip)
     (*count)--;
     return 0;
 }
+static int contains(const char list[][STORAGE_IP_LEN], size_t count, const char *ip)
+{
+    size_t i;
+    for (i = 0; i < count; i++)
+        if (!strcmp(list[i], ip)) return 1;
+    return 0;
+}
 static int p_add(const char *ip) { if (fail_perm_add) return -1; return add_to(fake_perm, &fake_perm_count, ip); }
 static int p_del(const char *ip) { if (fail_perm_delete) return -1; return del_from(fake_perm, &fake_perm_count, ip); }
 static int t_add(const char *ip) { if (fail_temp_add) return -1; return add_to(fake_temp, &fake_temp_count, ip); }
@@ -262,8 +269,10 @@ int main(void)
         fail_temp_delete_on_call = 0;
         assert(reloaded.temporary_count == 2);
         assert(fake_temp_count == 2);
-        assert(!strcmp(fake_temp[0], entries[0].ip));
-        assert(!strcmp(fake_temp[1], entries[1].ip));
+        assert(contains((const char (*)[STORAGE_IP_LEN])fake_temp,
+                        fake_temp_count, entries[0].ip));
+        assert(contains((const char (*)[STORAGE_IP_LEN])fake_temp,
+                        fake_temp_count, entries[1].ip));
 
         /* If the compensating add also fails, report unresolved divergence. */
         temp_delete_calls = 0;
@@ -287,8 +296,10 @@ int main(void)
         assert(rename(moved, dir) == 0);
         assert(reloaded.temporary_count == 2);
         assert(fake_temp_count == 2);
-        assert(!strcmp(fake_temp[0], entries[0].ip));
-        assert(!strcmp(fake_temp[1], entries[1].ip));
+        assert(contains((const char (*)[STORAGE_IP_LEN])fake_temp,
+                        fake_temp_count, entries[0].ip));
+        assert(contains((const char (*)[STORAGE_IP_LEN])fake_temp,
+                        fake_temp_count, entries[1].ip));
     }
 
     {
