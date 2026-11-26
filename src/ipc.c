@@ -15,6 +15,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <poll.h>
 
 /* FreeBSD exposes this BSD API outside strict POSIX feature profiles. */
 #if defined(__FreeBSD__)
@@ -56,7 +57,25 @@ ipc_init(const char *path, ipc_request_handler handler, void *context)
         return -1;
 
     if (lstat(path, &st) == 0) {
-        if (!S_ISSOCK(st.st_mode) || st.st_uid != 0 || unlink(path) != 0)
+        int probe;
+        if (!S_ISSOCK(st.st_mode) || st.st_uid != 0)
+            return -1;
+        probe = socket(AF_UNIX, SOCK_STREAM, 0);
+        if (probe < 0)
+            return -1;
+        memset(&address, 0, sizeof(address));
+        address.sun_family = AF_UNIX;
+        snprintf(address.sun_path, sizeof(address.sun_path), "%s", path);
+        if (connect(probe, (struct sockaddr *)&address, sizeof(address)) == 0) {
+            close(probe);
+            return -1; /* Another daemon already owns this socket. */
+        }
+        if (errno != ECONNREFUSED && errno != ENOENT) {
+            close(probe);
+            return -1;
+        }
+        close(probe);
+        if (unlink(path) != 0)
             return -1;
     } else if (errno != ENOENT) {
         return -1;
@@ -128,18 +147,41 @@ ipc_process(void)
     }
     (void)peer_gid;
 
-    n = recv(client_fd, request, sizeof(request) - 1, 0);
-    if (n <= 0) {
-        close(client_fd);
-        return 0;
+    {
+        struct pollfd pfd;
+        size_t used = 0;
+        int ready;
+        pfd.fd = client_fd;
+        pfd.events = POLLIN;
+        while (used < sizeof(request) - 1) {
+            ready = poll(&pfd, 1, 1000);
+            if (ready <= 0) {
+                close(client_fd);
+                return 0; /* Idle or timed-out client cannot stall the daemon. */
+            }
+            n = recv(client_fd, request + used,
+                     sizeof(request) - 1 - used, 0);
+            if (n <= 0) {
+                close(client_fd);
+                return 0;
+            }
+            used += (size_t)n;
+            request[used] = '\0';
+            newline = strchr(request, '\n');
+            if (newline) {
+                if (newline[1] != '\0') {
+                    close(client_fd);
+                    return 0;
+                }
+                *newline = '\0';
+                break;
+            }
+        }
+        if (used == sizeof(request) - 1 && request[used - 1] != '\n') {
+            close(client_fd);
+            return 0;
+        }
     }
-    request[n] = '\0';
-    newline = strchr(request, '\n');
-    if (!newline || newline[1] != '\0') {
-        close(client_fd);
-        return 0;
-    }
-    *newline = '\0';
 
     memset(response, 0, sizeof(response));
     if (request_handler(request, response, sizeof(response), handler_context) != 0 &&
