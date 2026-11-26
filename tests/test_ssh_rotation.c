@@ -53,7 +53,7 @@ int main(void)
         "sshd: Failed password for deliberately-very-long-test-account-name-"
         "to-force-a-large-file-offset from 192.0.2.4 port 22 ssh2\n";
     const char *short_event =
-        "sshd: Failed password for x from 192.0.2.5 port 22 ssh2\\n";
+        "sshd: Failed password for x from 192.0.2.5 port 22 ssh2\n";
     const char *regrown_event =
         "sshd: Failed password for rewritten-"
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -93,14 +93,14 @@ int main(void)
     assert(rename(log_path, rotated_path) == 0);
     write_file(log_path, event4, 0);
     ssh_process();
-    assert(count_text(output_path, "auth_failure from") == 4);
+    assert(count_text(output_path, "auth_failure from") == 3);
 
     /* A temporarily missing pathname must recover when a new file appears. */
     assert(rename(log_path, missing_path) == 0);
     ssh_process();
     write_file(log_path, event3, 0);
     ssh_process();
-    assert(count_text(output_path, "auth_failure from") == 3);
+    assert(count_text(output_path, "auth_failure from") == 4);
 
     /*
      * copytruncate: append and consume a long record first, then truncate
