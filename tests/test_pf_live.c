@@ -47,11 +47,19 @@ static int address_present(const char *table) {
     }
     close(output_pipe[0]);
 
-    if (waitpid(pid, &status, 0) < 0 ||
-        !WIFEXITED(status) || WEXITSTATUS(status) != 0)
+    if (waitpid(pid, &status, 0) < 0 || !WIFEXITED(status))
         return -1;
 
-    return strstr(output, "1/1 addresses match") != NULL ? 1 : 0;
+    /*
+     * pfctl may return a non-zero exit status when the address is absent.
+     * The match count is the authoritative result; only unknown output is
+     * treated as an inspection error.
+     */
+    if (strstr(output, "1/1 addresses match") != NULL)
+        return 1;
+    if (strstr(output, "0/1 addresses match") != NULL)
+        return 0;
+    return -1;
 }
 
 static int exercise_table(const char *name,
