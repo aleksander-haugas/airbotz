@@ -11,9 +11,9 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` verified and closed.
 - [~] S1. Review and correct atomic replacement semantics in `src/storage.c`.
   - [x] S1.a Identify unchecked directory-open/fsync errors.
   - [x] S1.b Identify ambiguous failure after successful rename.
-  - [ ] S1.c Define and implement explicit result semantics for pre-rename failure vs post-rename durability uncertainty.
-  - [ ] S1.d Add deterministic fault-injection tests for write/flush/fsync/close/rename/directory-fsync paths.
-  - [ ] S1.e Verify no incorrect PF rollback or memory/disk divergence on uncertain commit.
+  - [~] S1.c Implement explicit result semantics: 0 = durable, -1 = not replaced, -2 = renamed but directory durability uncertain. Address Manager uses -3 for committed-but-uncertain and keeps PF/memory aligned. Commits: `044739b`, `b22f099`, `5c27940`, `690d8a3`.
+  - [~] S1.d Add deterministic fault-injection tests. Directory-fsync failure injection and focused tests added; write/flush/file-fsync/close/rename failure injection remains.
+  - [~] S1.e Add test proving uncertain post-rename save does not roll PF back and memory follows visible storage. Awaiting FreeBSD execution. Commits: `5b9e5e9`, `640447e`, `c37410c`, `41f10cc`, `0e89f0e`, `76823a9`.
 - [ ] S2. Harden synchronization and error reporting for persistent files.
 - [ ] S3. Ensure consistency between storage, in-memory state, and PF on all failure paths.
 - [ ] S4. Test malformed, truncated, oversized, and corrupted persistence files.
