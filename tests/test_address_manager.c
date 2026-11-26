@@ -11,6 +11,7 @@ static char fake_perm[8][STORAGE_IP_LEN];
 static char fake_temp[8][STORAGE_IP_LEN];
 static size_t fake_perm_count, fake_temp_count;
 static int fail_perm_add, fail_perm_delete, fail_temp_add, fail_temp_delete;
+static size_t temp_delete_calls, fail_temp_delete_on_call;
 
 static int add_to(char list[][STORAGE_IP_LEN], size_t *count, const char *ip)
 {
@@ -32,7 +33,7 @@ static int del_from(char list[][STORAGE_IP_LEN], size_t *count, const char *ip)
 static int p_add(const char *ip) { if (fail_perm_add) return -1; return add_to(fake_perm, &fake_perm_count, ip); }
 static int p_del(const char *ip) { if (fail_perm_delete) return -1; return del_from(fake_perm, &fake_perm_count, ip); }
 static int t_add(const char *ip) { if (fail_temp_add) return -1; return add_to(fake_temp, &fake_temp_count, ip); }
-static int t_del(const char *ip) { if (fail_temp_delete) return -1; return del_from(fake_temp, &fake_temp_count, ip); }
+static int t_del(const char *ip) { temp_delete_calls++; if (fail_temp_delete || (fail_temp_delete_on_call && temp_delete_calls == fail_temp_delete_on_call)) return -1; return del_from(fake_temp, &fake_temp_count, ip); }
 
 int main(void)
 {
@@ -237,6 +238,40 @@ int main(void)
         assert(address_manager_restore(&reloaded) == 0);
         assert(fake_perm_count == 3);
         assert(fake_temp_count == 2);
+    }
+
+    /* Expiry must restore earlier PF deletions if a later delete fails,
+     * and must restore all deleted entries if persistence cannot commit. */
+    {
+        struct storage_temporary entries[2];
+        char moved[512];
+
+        snprintf(entries[0].ip, sizeof(entries[0].ip), "192.0.2.70");
+        entries[0].expires_at = now + 10;
+        snprintf(entries[1].ip, sizeof(entries[1].ip), "192.0.2.71");
+        entries[1].expires_at = now + 20;
+        assert(storage_save_temporary(entries, 2) == 0);
+        assert(t_add(entries[0].ip) == 0);
+        assert(t_add(entries[1].ip) == 0);
+        assert(address_manager_init(&reloaded, &ops, 1) == 0);
+
+        temp_delete_calls = 0;
+        fail_temp_delete_on_call = 2;
+        assert(address_manager_expire(&reloaded, now + 30, &expired) == -1);
+        fail_temp_delete_on_call = 0;
+        assert(reloaded.temporary_count == 2);
+        assert(fake_temp_count == 2);
+        assert(!strcmp(fake_temp[0], entries[0].ip));
+        assert(!strcmp(fake_temp[1], entries[1].ip));
+
+        snprintf(moved, sizeof(moved), "%s.expire-rollback", dir);
+        assert(rename(dir, moved) == 0);
+        assert(address_manager_expire(&reloaded, now + 30, &expired) == -1);
+        assert(rename(moved, dir) == 0);
+        assert(reloaded.temporary_count == 2);
+        assert(fake_temp_count == 2);
+        assert(!strcmp(fake_temp[0], entries[0].ip));
+        assert(!strcmp(fake_temp[1], entries[1].ip));
     }
 
     {
