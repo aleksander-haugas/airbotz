@@ -202,6 +202,40 @@ int main(void)
         assert(fake_temp_count == 1 && !strcmp(fake_temp[0], entries[1].ip));
     }
 
+    /* A partial startup restore must not delete entries already present in
+     * PF: the manager cannot distinguish pre-existing table members from
+     * entries added by this restore. Keep the partial state and allow an
+     * idempotent retry after the transient PF failure is cleared. */
+    {
+        char permanent[2][STORAGE_IP_LEN];
+        struct storage_temporary entries[2];
+
+        snprintf(permanent[0], sizeof(permanent[0]), "198.51.100.40");
+        snprintf(permanent[1], sizeof(permanent[1]), "198.51.100.41");
+        snprintf(entries[0].ip, sizeof(entries[0].ip), "2001:db8::40");
+        entries[0].expires_at = now + 300;
+        snprintf(entries[1].ip, sizeof(entries[1].ip), "2001:db8::41");
+        entries[1].expires_at = now + 300;
+        assert(storage_save_permanent((const char (*)[STORAGE_IP_LEN])permanent, 2) == 0);
+        assert(storage_save_temporary(entries, 2) == 0);
+
+        /* Simulate a table member which predates this restore. */
+        assert(p_add("203.0.113.200") == 0);
+        assert(address_manager_init(&reloaded, &ops, 1) == 0);
+        fail_temp_add = 1;
+        assert(address_manager_restore(&reloaded) == -1);
+        fail_temp_add = 0;
+
+        assert(reloaded.permanent_count == 2);
+        assert(reloaded.temporary_count == 2);
+        assert(fake_perm_count == 3);
+        assert(fake_temp_count == 0);
+        assert(!strcmp(fake_perm[0], "203.0.113.200"));
+        assert(address_manager_restore(&reloaded) == 0);
+        assert(fake_perm_count == 3);
+        assert(fake_temp_count == 2);
+    }
+
     {
         char path[512];
         snprintf(path, sizeof(path), "%s/permanent.list", dir); unlink(path);
