@@ -10,7 +10,7 @@
 static char fake_perm[8][STORAGE_IP_LEN];
 static char fake_temp[8][STORAGE_IP_LEN];
 static size_t fake_perm_count, fake_temp_count;
-static int fail_perm_add, fail_temp_delete;
+static int fail_perm_add, fail_perm_delete, fail_temp_add, fail_temp_delete;
 
 static int add_to(char list[][STORAGE_IP_LEN], size_t *count, const char *ip)
 {
@@ -30,8 +30,8 @@ static int del_from(char list[][STORAGE_IP_LEN], size_t *count, const char *ip)
     return 0;
 }
 static int p_add(const char *ip) { if (fail_perm_add) return -1; return add_to(fake_perm, &fake_perm_count, ip); }
-static int p_del(const char *ip) { return del_from(fake_perm, &fake_perm_count, ip); }
-static int t_add(const char *ip) { return add_to(fake_temp, &fake_temp_count, ip); }
+static int p_del(const char *ip) { if (fail_perm_delete) return -1; return del_from(fake_perm, &fake_perm_count, ip); }
+static int t_add(const char *ip) { if (fail_temp_add) return -1; return add_to(fake_temp, &fake_temp_count, ip); }
 static int t_del(const char *ip) { if (fail_temp_delete) return -1; return del_from(fake_temp, &fake_temp_count, ip); }
 
 int main(void)
@@ -92,6 +92,73 @@ int main(void)
     assert(address_manager_delete_temporary(&manager, "2001:db8::10") == -1);
     fail_temp_delete = 0;
     assert(manager.temporary_count == 1);
+
+    /* Storage failure after each PF mutation must roll PF back while memory
+     * remains unchanged. The directory is moved only for the operation. */
+    {
+        char moved[512];
+        snprintf(moved, sizeof(moved), "%s.rollback", dir);
+
+        assert(rename(dir, moved) == 0);
+        assert(address_manager_add_permanent(&manager, "198.51.100.20") == -1);
+        assert(rename(moved, dir) == 0);
+        assert(manager.permanent_count == 1 && fake_perm_count == 1);
+
+        assert(rename(dir, moved) == 0);
+        assert(address_manager_delete_permanent(&manager, "192.0.2.10") == -1);
+        assert(rename(moved, dir) == 0);
+        assert(manager.permanent_count == 1 && fake_perm_count == 1);
+
+        assert(rename(dir, moved) == 0);
+        assert(address_manager_add_temporary(&manager, "2001:db8::20", now + 300) == -1);
+        assert(rename(moved, dir) == 0);
+        assert(manager.temporary_count == 1 && fake_temp_count == 1);
+
+        assert(rename(dir, moved) == 0);
+        assert(address_manager_delete_temporary(&manager, "2001:db8::10") == -1);
+        assert(rename(moved, dir) == 0);
+        assert(manager.temporary_count == 1 && fake_temp_count == 1);
+    }
+
+    /* If the compensating PF operation also fails, return -2 and leave the
+     * discrepancy visible to the caller instead of claiming a clean rollback. */
+    {
+        char moved[512];
+        snprintf(moved, sizeof(moved), "%s.rollback-fail", dir);
+
+        assert(rename(dir, moved) == 0);
+        fail_perm_delete = 1;
+        assert(address_manager_add_permanent(&manager, "198.51.100.21") == -2);
+        fail_perm_delete = 0;
+        assert(rename(moved, dir) == 0);
+        assert(manager.permanent_count == 1 && fake_perm_count == 2);
+        assert(p_del("198.51.100.21") == 0);
+        assert(fake_perm_count == 1);
+
+        assert(rename(dir, moved) == 0);
+        fail_perm_add = 1;
+        assert(address_manager_delete_permanent(&manager, "192.0.2.10") == -2);
+        fail_perm_add = 0;
+        assert(rename(moved, dir) == 0);
+        assert(manager.permanent_count == 1 && fake_perm_count == 0);
+        assert(p_add("192.0.2.10") == 0);
+
+        assert(rename(dir, moved) == 0);
+        fail_temp_delete = 1;
+        assert(address_manager_add_temporary(&manager, "2001:db8::21", now + 300) == -2);
+        fail_temp_delete = 0;
+        assert(rename(moved, dir) == 0);
+        assert(manager.temporary_count == 1 && fake_temp_count == 2);
+        assert(t_del("2001:db8::21") == 0);
+
+        assert(rename(dir, moved) == 0);
+        fail_temp_add = 1;
+        assert(address_manager_delete_temporary(&manager, "2001:db8::10") == -2);
+        fail_temp_add = 0;
+        assert(rename(moved, dir) == 0);
+        assert(manager.temporary_count == 1 && fake_temp_count == 0);
+        assert(t_add("2001:db8::10") == 0);
+    }
 
     assert(address_manager_expire(&manager, now + 121, &expired) == 0);
     assert(expired == 1 && manager.temporary_count == 0 && fake_temp_count == 0);
