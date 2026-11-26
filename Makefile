@@ -14,7 +14,8 @@ test: airbotz
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o tests/test_ssh tests/test_ssh.c src/ssh/ssh_parser.c
 	./tests/test_ssh
 install: airbotz
-	install -d $(DESTDIR)$(PREFIX)/sbin $(DESTDIR)$(PREFIX)/etc/airbotz
+	install -d $(DESTDIR)$(PREFIX)/sbin $(DESTDIR)$(PREFIX)/etc/airbotz $(DESTDIR)$(PREFIX)/etc/rc.d
 	install -m 0555 airbotz $(DESTDIR)$(PREFIX)/sbin/airbotz
 	install -m 0640 config/airbotz.conf $(DESTDIR)$(PREFIX)/etc/airbotz/airbotz.conf.sample
+	install -m 0555 rc.d/airbotz $(DESTDIR)$(PREFIX)/etc/rc.d/airbotz
 .PHONY: all clean test install
