@@ -196,11 +196,17 @@ core_init(const char *path)
         pf_ready = 1;
     }
 
-    if (address_manager_init(&addresses, &pf_ops, pf_ready) != 0 ||
-        address_manager_restore(&addresses) != 0) {
-        logger_log("ERROR", "Cannot initialize or restore managed IP addresses");
-        core_shutdown();
-        return -1;
+    {
+        int manager_rc = address_manager_init(&addresses, &pf_ops, pf_ready);
+        if (manager_rc == 0)
+            manager_rc = address_manager_restore(&addresses);
+        if (manager_rc != 0) {
+            logger_log("ERROR", manager_rc == -3 ?
+                "Managed IP expiry cleanup committed, but storage durability is uncertain" :
+                "Cannot initialize or restore managed IP addresses");
+            core_shutdown();
+            return -1;
+        }
     }
 
     if (ssh_init(cfg.ssh_log) != 0) {
@@ -245,10 +251,15 @@ core_run(void)
         ssh_process();
         if (ipc_process() != 0)
             logger_log("ERROR", "Control socket processing failed");
-        if (address_manager_expire(&addresses, time(NULL), &expired) != 0)
-            logger_log("ERROR", "Could not expire temporary PF addresses");
-        else if (expired)
-            logger_log("INFO", "Expired %zu temporary IP addresses", expired);
+        {
+            int expire_rc = address_manager_expire(&addresses, time(NULL), &expired);
+            if (expire_rc == -3)
+                logger_log("ERROR", "Temporary IP expiry committed, but storage durability is uncertain");
+            else if (expire_rc != 0)
+                logger_log("ERROR", "Could not expire temporary PF addresses");
+            else if (expired)
+                logger_log("INFO", "Expired %zu temporary IP addresses", expired);
+        }
         if (!stopping)
             (void)sleep(cfg.poll_interval);
     }
