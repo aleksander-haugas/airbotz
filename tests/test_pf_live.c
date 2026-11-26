@@ -66,7 +66,7 @@ static int exercise_table(const char *name,
         fprintf(stderr,
                 "SKIP: %s already contains %s; leaving existing entry untouched\n",
                 name, TEST_IP);
-        return -1;
+        return 1;
     }
 
     printf("Testing %s with %s\n", name, TEST_IP);
@@ -105,9 +105,9 @@ int main(void) {
      * that already contains the address, so the test cannot delete a
      * pre-existing entry.
      */
-    if (exercise_table("airbotz_temp", pf_temp_add, pf_temp_delete) != 0)
+    if (exercise_table("airbotz_temp", pf_temp_add, pf_temp_delete) < 0)
         failed = 1;
-    if (exercise_table("airbotz_perm", pf_perm_add, pf_perm_delete) != 0)
+    if (exercise_table("airbotz_perm", pf_perm_add, pf_perm_delete) < 0)
         failed = 1;
 
     pf_shutdown();
