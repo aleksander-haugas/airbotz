@@ -13,7 +13,7 @@ run_client(int argc, char **argv, const char *config_path)
     int n, first = 1;
 
     if (config_load(config_path, &cfg) != 0) {
-        fprintf(stderr, "Cannot read AirBotz configuration: %s\\n", config_path);
+        fprintf(stderr, "Cannot read AirBotz configuration: %s\n", config_path);
         return 1;
     }
     if (argc > 1 && strcmp(argv[1], "-c") == 0)
