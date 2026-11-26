@@ -8,6 +8,7 @@ Minimal FreeBSD security daemon focused exclusively on PF and SSH.
 - SSH authentication log tailing and event classification.
 - IPv4/IPv6 validation with `inet_pton`.
 - Persistent permanent and expiring temporary IP lists.
+- Transactional address-management module with PF rollback on persistence failures.
 - Small configuration, logging, signal handling and clean shutdown.
 
 No web panel, REST API, Nginx/FTP parsers, AI integration, generic rule engine,
@@ -79,4 +80,4 @@ SSH events; automatic blocking remains disabled.
 ## Design
 
 main -> core lifecycle -> config/logger/storage/PF/SSH modules.
-The SSH module observes and classifies; policy and enforcement remain separate.
+The SSH module observes and classifies; policy and enforcement remain separate.\nThe address manager exposes explicit add/delete/expiry operations for future\nCLI or API integration. These operations are not triggered by SSH events.
