@@ -62,9 +62,9 @@ int main(void)
     /* Post-rename directory-fsync failure is committed: do not roll PF back,
      * and keep memory aligned with the visible replacement. */
     {
-        storage_test_fail_directory_fsync(1);
+        storage_test_fail_stage(STORAGE_TEST_FAIL_DIRECTORY_FSYNC);
         assert(address_manager_add_permanent(&manager, "203.0.113.88") == -3);
-        storage_test_fail_directory_fsync(0);
+        storage_test_fail_stage(STORAGE_TEST_FAIL_NONE);
         assert(manager.permanent_count == 2);
         assert(fake_perm_count == 2);
         assert(!strcmp(manager.permanent[1], "203.0.113.88"));
@@ -124,10 +124,10 @@ int main(void)
         assert(storage_save_temporary(entries, 2) == 0);
         assert(t_add(entries[0].ip) == 0);
 
-        storage_test_fail_directory_fsync(1);
+        storage_test_fail_stage(STORAGE_TEST_FAIL_DIRECTORY_FSYNC);
         assert(address_manager_init(&reloaded, &ops, 1) == 0);
         assert(address_manager_restore(&reloaded) == -3);
-        storage_test_fail_directory_fsync(0);
+        storage_test_fail_stage(STORAGE_TEST_FAIL_NONE);
 
         assert(reloaded.permanent_count == 1);
         assert(reloaded.temporary_count == 1);
