@@ -98,7 +98,7 @@ address_manager_add_permanent(struct address_manager *m, const char *ip)
     }
     if (storage_save_permanent((const char (*)[STORAGE_IP_LEN])candidate,
                                count + 1) != 0) {
-        if (added_pf) (void)m->ops.perm_delete(ip);
+        if (added_pf && m->ops.perm_delete(ip) != 0) return -2;
         return -1;
     }
     memcpy(m->permanent, candidate, (count + 1) * sizeof(candidate[0]));
@@ -127,7 +127,7 @@ address_manager_delete_permanent(struct address_manager *m, const char *ip)
         removed_pf = 1;
     }
     if (storage_save_permanent((const char (*)[STORAGE_IP_LEN])candidate, count) != 0) {
-        if (removed_pf) (void)m->ops.perm_add(ip);
+        if (removed_pf && m->ops.perm_add(ip) != 0) return -2;
         return -1;
     }
     memcpy(m->permanent, candidate, count * sizeof(candidate[0]));
@@ -161,7 +161,7 @@ address_manager_add_temporary(struct address_manager *m, const char *ip,
         added_pf = is_new;
     }
     if (storage_save_temporary(candidate, count) != 0) {
-        if (added_pf) (void)m->ops.temp_delete(ip);
+        if (added_pf && m->ops.temp_delete(ip) != 0) return -2;
         return -1;
     }
     memcpy(m->temporary, candidate, count * sizeof(candidate[0]));
@@ -186,7 +186,7 @@ address_manager_delete_temporary(struct address_manager *m, const char *ip)
 
     if (m->pf_enabled && m->ops.temp_delete(ip) != 0) return -1;
     if (storage_save_temporary(candidate, count) != 0) {
-        if (m->pf_enabled) (void)m->ops.temp_add(ip);
+        if (m->pf_enabled && m->ops.temp_add(ip) != 0) return -2;
         return -1;
     }
     memcpy(m->temporary, candidate, count * sizeof(candidate[0]));
@@ -206,8 +206,9 @@ address_manager_expire(struct address_manager *m, time_t now, size_t *expired_co
             if (m->pf_enabled && m->ops.temp_delete(m->temporary[i].ip) != 0) {
                 size_t j;
                 for (j = 0; j < i; j++)
-                    if (m->temporary[j].expires_at <= now)
-                        (void)m->ops.temp_add(m->temporary[j].ip);
+                    if (m->temporary[j].expires_at <= now &&
+                        m->ops.temp_add(m->temporary[j].ip) != 0)
+                        return -2;
                 return -1;
             }
             expired++;
@@ -222,8 +223,9 @@ address_manager_expire(struct address_manager *m, time_t now, size_t *expired_co
     if (storage_save_temporary(candidate, count) != 0) {
         if (m->pf_enabled)
             for (i = 0; i < m->temporary_count; i++)
-                if (m->temporary[i].expires_at <= now)
-                    (void)m->ops.temp_add(m->temporary[i].ip);
+                if (m->temporary[i].expires_at <= now &&
+                    m->ops.temp_add(m->temporary[i].ip) != 0)
+                    return -2;
         return -1;
     }
     memcpy(m->temporary, candidate, count * sizeof(candidate[0]));
