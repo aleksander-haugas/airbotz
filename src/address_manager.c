@@ -50,7 +50,7 @@ address_manager_restore(struct address_manager *m)
     struct storage_temporary valid[STORAGE_MAX_ENTRIES];
     size_t i, count = 0;
     time_t now;
-    int changed = 0;
+    int changed = 0, durability_uncertain = 0;
 
     if (!m || (now = time(NULL)) == (time_t)-1) return -1;
     for (i = 0; i < m->temporary_count; i++) {
@@ -81,7 +81,7 @@ address_manager_restore(struct address_manager *m)
             }
             memcpy(m->temporary, valid, count * sizeof(valid[0]));
             m->temporary_count = count;
-            if (save_rc == -2) return -3;
+            if (save_rc == -2) durability_uncertain = 1;
         }
     }
 
@@ -93,7 +93,7 @@ address_manager_restore(struct address_manager *m)
             if (m->ops.temp_add(m->temporary[i].ip) != 0)
                 return -1;
     }
-    return 0;
+    return durability_uncertain ? -3 : 0;
 }
 
 int
