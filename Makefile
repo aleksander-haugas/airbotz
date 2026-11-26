@@ -31,15 +31,19 @@ tests/test_storage: tests/test_storage.c src/storage.c src/pf/pf.c
 tests/test_address_manager: tests/test_address_manager.c src/address_manager.c src/storage.c src/pf/pf.c
 	$(CC) $(CFLAGS) -o $@ tests/test_address_manager.c src/address_manager.c src/storage.c src/pf/pf.c
 
+tests/test_ipc: tests/test_ipc.c src/ipc.c
+	$(CC) $(CFLAGS) -o $@ tests/test_ipc.c src/ipc.c
+
 clean:
 	rm -f $(OBJ) airbotz tests/test_ssh tests/test_pf tests/test_pf_live tests/test_ssh_rotation tests/test_storage tests/test_address_manager
 
-test: airbotz tests/test_ssh tests/test_pf tests/test_ssh_rotation tests/test_storage tests/test_address_manager
+test: airbotz tests/test_ssh tests/test_pf tests/test_ssh_rotation tests/test_storage tests/test_address_manager tests/test_ipc
 	./tests/test_ssh
 	./tests/test_pf
 	./tests/test_ssh_rotation
 	./tests/test_storage
 	./tests/test_address_manager
+	./tests/test_ipc
 
 test-pf-live: tests/test_pf_live
 	@echo "Run with root privileges: ./tests/test_pf_live"
