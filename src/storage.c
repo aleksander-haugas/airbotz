@@ -16,8 +16,6 @@
 
 static char db_dir[512];
 
-#ifdef AIRBOTZ_STORAGE_TESTING
-static int test_fail_stage;
 enum {
     STORAGE_TEST_FAIL_NONE = 0,
     STORAGE_TEST_FAIL_WRITE,
@@ -28,9 +26,21 @@ enum {
     STORAGE_TEST_FAIL_DIRECTORY_FSYNC,
     STORAGE_TEST_FAIL_DIRECTORY_CLOSE
 };
+#ifdef AIRBOTZ_STORAGE_TESTING
+static int test_fail_stage;
 void storage_test_fail_stage(int stage)
 {
     test_fail_stage = stage;
+}
+static int storage_test_should_fail(int stage)
+{
+    return test_fail_stage == stage;
+}
+#else
+static int storage_test_should_fail(int stage)
+{
+    (void)stage;
+    return 0;
 }
 #endif
 
@@ -234,7 +244,7 @@ static int atomic_writer(const char *name,
         return -1;
     }
 
-    if (test_fail_stage == STORAGE_TEST_FAIL_WRITE) {
+    if (storage_test_should_fail(STORAGE_TEST_FAIL_WRITE)) {
         errno = EIO;
         saved = errno;
         (void)fclose(f);
@@ -251,8 +261,8 @@ static int atomic_writer(const char *name,
         errno = saved;
         return -1;
     }
-    if (test_fail_stage == STORAGE_TEST_FAIL_FLUSH || fflush(f) != 0) {
-        if (test_fail_stage == STORAGE_TEST_FAIL_FLUSH) errno = EIO;
+    if (storage_test_should_fail(STORAGE_TEST_FAIL_FLUSH) || fflush(f) != 0) {
+        if (storage_test_should_fail(STORAGE_TEST_FAIL_FLUSH)) errno = EIO;
         saved = errno ? errno : EIO;
         (void)fclose(f);
         (void)unlink(temp);
@@ -260,8 +270,8 @@ static int atomic_writer(const char *name,
         errno = saved;
         return -1;
     }
-    if (test_fail_stage == STORAGE_TEST_FAIL_FILE_FSYNC || fsync(fd) != 0) {
-        if (test_fail_stage == STORAGE_TEST_FAIL_FILE_FSYNC) errno = EIO;
+    if (storage_test_should_fail(STORAGE_TEST_FAIL_FILE_FSYNC) || fsync(fd) != 0) {
+        if (storage_test_should_fail(STORAGE_TEST_FAIL_FILE_FSYNC)) errno = EIO;
         saved = errno ? errno : EIO;
         (void)fclose(f);
         (void)unlink(temp);
@@ -269,7 +279,7 @@ static int atomic_writer(const char *name,
         errno = saved;
         return -1;
     }
-    if (test_fail_stage == STORAGE_TEST_FAIL_FILE_CLOSE) {
+    if (storage_test_should_fail(STORAGE_TEST_FAIL_FILE_CLOSE)) {
         errno = EIO;
         saved = errno;
         (void)fclose(f);
@@ -287,8 +297,8 @@ static int atomic_writer(const char *name,
     }
     f = NULL;
 
-    if (test_fail_stage == STORAGE_TEST_FAIL_RENAME || rename(temp, path) != 0) {
-        if (test_fail_stage == STORAGE_TEST_FAIL_RENAME) errno = EIO;
+    if (storage_test_should_fail(STORAGE_TEST_FAIL_RENAME) || rename(temp, path) != 0) {
+        if (storage_test_should_fail(STORAGE_TEST_FAIL_RENAME)) errno = EIO;
         saved = errno ? errno : EIO;
         (void)unlink(temp);
         (void)close(dirfd);
@@ -299,9 +309,9 @@ static int atomic_writer(const char *name,
     /* From this point onward the new file is visible: never report a
      * pre-commit failure, and callers must not roll back PF as if it were not. */
 #ifdef AIRBOTZ_STORAGE_TESTING
-    if (test_fail_stage == STORAGE_TEST_FAIL_DIRECTORY_FSYNC ||
+    if (storage_test_should_fail(STORAGE_TEST_FAIL_DIRECTORY_FSYNC) ||
         fsync(dirfd) != 0) {
-        if (test_fail_stage == STORAGE_TEST_FAIL_DIRECTORY_FSYNC) errno = EIO;
+        if (storage_test_should_fail(STORAGE_TEST_FAIL_DIRECTORY_FSYNC)) errno = EIO;
 #else
     if (fsync(dirfd) != 0) {
 #endif
@@ -311,7 +321,7 @@ static int atomic_writer(const char *name,
         return -2;
     }
 #ifdef AIRBOTZ_STORAGE_TESTING
-    if (test_fail_stage == STORAGE_TEST_FAIL_DIRECTORY_CLOSE) {
+    if (storage_test_should_fail(STORAGE_TEST_FAIL_DIRECTORY_CLOSE)) {
         (void)close(dirfd);
         errno = EIO;
         saved = errno;
