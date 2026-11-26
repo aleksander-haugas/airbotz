@@ -11,7 +11,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static char table_name[64];
+static char temp_table[64];
+static char perm_table[64];
 
 int pf_valid_address(const char *ip) {
     unsigned char buf[sizeof(struct in6_addr)];
@@ -21,7 +22,7 @@ int pf_valid_address(const char *ip) {
 
 static int valid_table(const char *s) {
     size_t i, n;
-    if (!s || !(n = strlen(s)) || n >= sizeof(table_name)) return 0;
+    if (!s || !(n = strlen(s)) || n >= sizeof(temp_table)) return 0;
     for (i = 0; i < n; i++) {
         if (!((s[i] >= 'a' && s[i] <= 'z') ||
               (s[i] >= 'A' && s[i] <= 'Z') ||
@@ -42,9 +43,13 @@ static int run_pfctl(char *const argv[]) {
     return WIFEXITED(status) && WEXITSTATUS(status) == 0 ? 0 : -1;
 }
 
-int pf_init(const char *table) {
-    if (!valid_table(table)) return -1;
-    snprintf(table_name, sizeof(table_name), "%s", table);
+int pf_init(const char *temporary, const char *permanent) {
+    if (!valid_table(temporary) || !valid_table(permanent) ||
+        strcmp(temporary, permanent) == 0)
+        return -1;
+
+    snprintf(temp_table, sizeof(temp_table), "%s", temporary);
+    snprintf(perm_table, sizeof(perm_table), "%s", permanent);
     return 0;
 }
 
@@ -53,20 +58,31 @@ int pf_status(void) {
     return run_pfctl(args);
 }
 
-int pf_table_add(const char *ip) {
-    char *const args[] = {"/sbin/pfctl", "-t", table_name, "-T", "add",
-                          (char *)ip, NULL};
-    if (!pf_valid_address(ip) || !table_name[0]) return -1;
+static int table_operation(const char *table, const char *operation,
+                           const char *ip) {
+    char *const args[] = {"/sbin/pfctl", "-t", (char *)table, "-T",
+                          (char *)operation, (char *)ip, NULL};
+    if (!table[0] || !pf_valid_address(ip)) return -1;
     return run_pfctl(args);
 }
 
-int pf_table_delete(const char *ip) {
-    char *const args[] = {"/sbin/pfctl", "-t", table_name, "-T", "delete",
-                          (char *)ip, NULL};
-    if (!pf_valid_address(ip) || !table_name[0]) return -1;
-    return run_pfctl(args);
+int pf_temp_add(const char *ip) {
+    return table_operation(temp_table, "add", ip);
+}
+
+int pf_temp_delete(const char *ip) {
+    return table_operation(temp_table, "delete", ip);
+}
+
+int pf_perm_add(const char *ip) {
+    return table_operation(perm_table, "add", ip);
+}
+
+int pf_perm_delete(const char *ip) {
+    return table_operation(perm_table, "delete", ip);
 }
 
 void pf_shutdown(void) {
-    table_name[0] = '\0';
+    temp_table[0] = '\0';
+    perm_table[0] = '\0';
 }
