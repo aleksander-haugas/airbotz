@@ -19,7 +19,9 @@ struct address_manager {
     size_t temporary_count;
 };
 
-/* storage_init() must have succeeded before this call.\n * Operations return 0 on success, -1 on failure with rollback attempted,\n * and -2 if a PF rollback also fails and enforcement state may be inconsistent. */
+/* storage_init() must have succeeded before this call.
+ * Operations return 0 on success, -1 on failure with rollback attempted,
+ * and -2 if a PF rollback also fails and enforcement state may be inconsistent. */
 int address_manager_init(struct address_manager *manager,
                          const struct address_manager_ops *ops,
                          int pf_enabled);
