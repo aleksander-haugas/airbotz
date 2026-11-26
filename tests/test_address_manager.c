@@ -251,6 +251,7 @@ int main(void)
         snprintf(entries[1].ip, sizeof(entries[1].ip), "192.0.2.71");
         entries[1].expires_at = now + 20;
         assert(storage_save_temporary(entries, 2) == 0);
+        fake_temp_count = 0;
         assert(t_add(entries[0].ip) == 0);
         assert(t_add(entries[1].ip) == 0);
         assert(address_manager_init(&reloaded, &ops, 1) == 0);
