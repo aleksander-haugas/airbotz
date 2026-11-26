@@ -83,8 +83,11 @@ handle_ipc_request(const char *request, char *response, size_t response_size,
             return -1;
         for (i = 0; i < manager->permanent_count; i++) {
             if (append_text(response, response_size, &used,
-                            "permanent %s\n", manager->permanent[i], "") != 0)
+                            "permanent %s\n", manager->permanent[i], "") != 0) {
+                snprintf(response, response_size,
+                         "ERROR IP list exceeds response capacity\n");
                 return -1;
+            }
         }
         for (i = 0; i < manager->temporary_count; i++) {
             struct tm tmv;
@@ -94,8 +97,11 @@ handle_ipc_request(const char *request, char *response, size_t response_size,
                 snprintf(expiry, sizeof(expiry), "unknown");
             if (append_text(response, response_size, &used,
                             "temporary %s expires=%s\n",
-                            manager->temporary[i].ip, expiry) != 0)
+                            manager->temporary[i].ip, expiry) != 0) {
+                snprintf(response, response_size,
+                         "ERROR IP list exceeds response capacity\n");
                 return -1;
+            }
         }
         return 0;
     }
