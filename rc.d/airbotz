@@ -1,11 +1,24 @@
 #!/bin/sh
-# Minimal FreeBSD rc.d service definition.
+#
+# PROVIDE: airbotz
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+#
+# Add airbotz_enable="YES" to /etc/rc.conf to enable this service.
+
 . /etc/rc.subr
+
 name="airbotz"
 rcvar="airbotz_enable"
+
 load_rc_config "$name"
 : ${airbotz_enable:="NO"}
 : ${airbotz_config:="/usr/local/etc/airbotz/airbotz.conf"}
+
 command="/usr/local/sbin/airbotz"
 command_args="-c ${airbotz_config}"
+command_background="yes"
+pidfile="/var/run/airbotz.pid"
+required_files="${airbotz_config}"
+
 run_rc_command "$1"
