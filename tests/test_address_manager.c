@@ -1,3 +1,4 @@
+#define AIRBOTZ_STORAGE_TESTING
 #include "address_manager.h"
 
 #include <assert.h>
@@ -57,6 +58,22 @@ int main(void)
     assert(address_manager_init(&reloaded, &ops, 1) == 0);
     assert(reloaded.permanent_count == 1 && reloaded.temporary_count == 1);
     assert(address_manager_restore(&reloaded) == 0);
+
+
+    /* Post-rename directory-fsync failure is committed: do not roll PF back,
+     * and keep memory aligned with the visible replacement. */
+    {
+        storage_test_fail_directory_fsync(1);
+        assert(address_manager_add_permanent(&manager, "203.0.113.88") == -3);
+        storage_test_fail_directory_fsync(0);
+        assert(manager.permanent_count == 2);
+        assert(fake_perm_count == 2);
+        assert(!strcmp(manager.permanent[1], "203.0.113.88"));
+        assert(storage_load_permanent(manager.permanent, STORAGE_MAX_ENTRIES,
+                                      &manager.permanent_count) == 0);
+        assert(manager.permanent_count == 2);
+        assert(address_manager_delete_permanent(&manager, "203.0.113.88") == 0);
+    }
 
     fail_perm_add = 1;
     assert(address_manager_add_permanent(&manager, "198.51.100.2") == -1);
