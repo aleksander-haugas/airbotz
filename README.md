@@ -7,7 +7,7 @@ Minimal FreeBSD security daemon focused exclusively on PF and SSH.
 - PF status inspection and explicit operations on separate temporary and permanent tables.
 - SSH authentication log tailing and event classification.
 - IPv4/IPv6 validation with inet_pton.
-- Small configuration, logging, signal handling and clean shutdown.
+- Atomic persistence for permanent and expiring temporary IP lists.\n- Small configuration, logging, signal handling and clean shutdown.
 
 No web panel, REST API, Nginx/FTP parsers, AI integration, generic rule engine,
 persistent ban database, or automatic blocking is included.
