@@ -30,6 +30,13 @@ int main(void)
     snprintf(temp[1].ip, sizeof(temp[1].ip), "2001:db8::20");
     temp[1].expires_at = 1795824000;
     assert(storage_save_temporary(temp, 2) == 0);
+    /* A successful read followed by a close error must not be reported
+     * as a successful load or publish a new count. */
+    storage_test_fail_stage(STORAGE_TEST_FAIL_READ_CLOSE);
+    assert(storage_load_permanent(loaded, 4, &count) == -1);
+    storage_test_fail_stage(STORAGE_TEST_FAIL_NONE);
+    assert(storage_load_permanent(loaded, 4, &count) == 0 && count == 2);
+
     assert(storage_load_temporary(got, 2, &count) == 0 && count == 2);
     assert(strcmp(got[0].ip, temp[0].ip) == 0);
     assert(got[0].expires_at == temp[0].expires_at);
@@ -93,6 +100,23 @@ int main(void)
         assert(unlink(path) == 0);
     }
     assert(rmdir(dir) == 0);
+
+    /* Initialization must surface close failures instead of silently
+     * claiming that both persistence files were initialized successfully. */
+    {
+        char init_dir[] = "/tmp/airbotz-storage-init.XXXXXX";
+        char path[512];
+        assert(mkdtemp(init_dir) != NULL);
+        assert(rmdir(init_dir) == 0);
+        storage_test_fail_stage(STORAGE_TEST_FAIL_INIT_CLOSE);
+        assert(storage_init(init_dir) == -1);
+        storage_test_fail_stage(STORAGE_TEST_FAIL_NONE);
+        snprintf(path, sizeof(path), "%s/permanent.list", init_dir);
+        assert(unlink(path) == 0);
+        snprintf(path, sizeof(path), "%s/temporary.list", init_dir);
+        assert(unlink(path) == 0);
+        assert(rmdir(init_dir) == 0);
+    }
     puts("PASS: storage permissions, IPv4/IPv6 lists, UTC expiry, atomic replacement and validation");
     return 0;
 }
