@@ -1,4 +1,3 @@
-#define AIRBOTZ_STORAGE_TESTING
 #include "storage.h"
 #include <assert.h>
 #include <stdio.h>
