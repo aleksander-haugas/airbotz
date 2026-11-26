@@ -15,7 +15,10 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` verified and closed.
   - [x] S1.d Expanded deterministic fault injection to write-stage, flush, file-fsync, file-close, rename, directory-fsync and directory-close paths. Pre-rename tests assert the prior file remains intact; post-rename tests assert the replacement is visible with an uncertain result. Full suite passed on FreeBSD 15.1, commit `ee06c2c`.
   - [x] S1.e Tests prove uncertain post-rename save does not roll PF back and memory follows visible storage. Startup restore completes reapplying live PF entries before returning the durability warning. Full suite passed on FreeBSD 15.1, commit `ee06c2c`. Commits: `5b9e5e9`, `640447e`, `c37410c`, `41f10cc`, `0e89f0e`, `76823a9`.
 - [x] S2. Harden synchronization and error reporting for persistent files. Checked initialization `close()` and read `fclose()` results; cleanup preserves the original error; malformed data reports `EINVAL`; deterministic fault tests cover permanent/temporary read close failures and initialization close failure. Storage has no internal locks, but code review confirmed the daemon's current `core_run()` processes SSH, one IPC request, and expiry serially in a single event loop; this serialization requirement is documented in `include/storage.h`. FreeBSD 15.1 validation passed on `4f3e549`: clean production build, full `make test`, and root-only IPC integration test. Related commits: `025ae56`, `08e2460`, `99946c6`, `4f3e549`.
-- [ ] S3. Ensure consistency between storage, in-memory state, and PF on all failure paths.
+- [~] S3. Ensure consistency between storage, in-memory state, and PF on all failure paths.
+  - [ ] S3.a Review startup PF restoration when an add fails part-way through; define safe recovery without deleting entries that may have existed before restart.
+  - [ ] S3.b Review operation rollback paths and distinguish clean rollback from unresolved PF/storage divergence.
+  - [ ] S3.c Add deterministic tests for each failure path and validate on FreeBSD.
 - [ ] S4. Test malformed, truncated, oversized, and corrupted persistence files.
 - [ ] S5. Test recovery behavior after interrupted writes and process termination.
 
