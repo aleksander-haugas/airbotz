@@ -14,7 +14,6 @@ static volatile sig_atomic_t stopping;
 static int logger_ready;
 static int pf_ready;
 static int ssh_ready;
-static int storage_ready;
 static char permanent_ips[STORAGE_MAX_ENTRIES][STORAGE_IP_LEN];
 static size_t permanent_count;
 static struct storage_temporary temporary_entries[STORAGE_MAX_ENTRIES];
@@ -104,7 +103,6 @@ core_init(const char *path)
     logger_ready = 0;
     pf_ready = 0;
     ssh_ready = 0;
-    storage_ready = 0;
     permanent_count = 0;
     temporary_count = 0;
 
@@ -121,7 +119,6 @@ core_init(const char *path)
         core_shutdown();
         return -1;
     }
-    storage_ready = 1;
 
     if (cfg.enable_pf) {
         if (pf_init(cfg.pf_temp_table, cfg.pf_perm_table) != 0) {
