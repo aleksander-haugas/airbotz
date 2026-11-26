@@ -165,33 +165,96 @@ int storage_load_temporary(struct storage_temporary *entries, size_t capacity, s
     return 0;
 }
 
+/*
+ * Returns 0 when the replacement and directory entry are durable, -1 when
+ * the destination was not replaced, and -2 when rename succeeded but the
+ * directory fsync failed (replacement visible, crash durability uncertain).
+ */
 static int atomic_writer(const char *name,
                          int (*write_data)(FILE *, const void *), const void *data)
 {
     char path[1024], temp[1100];
-    int fd, rc, saved;
-    FILE *f;
+    int fd = -1, dirfd = -1, rc = -1, saved = 0;
+    FILE *f = NULL;
 
     if (make_path(path, sizeof(path), name) != 0 ||
-        snprintf(temp, sizeof(temp), "%s/.%s.XXXXXX", db_dir, name) >= (int)sizeof(temp))
+        snprintf(temp, sizeof(temp), "%s/.%s.XXXXXX", db_dir, name) >= (int)sizeof(temp)) {
+        errno = ENAMETOOLONG;
         return -1;
+    }
+
+#ifdef O_DIRECTORY
+    dirfd = open(db_dir, O_RDONLY | O_DIRECTORY);
+#else
+    dirfd = open(db_dir, O_RDONLY);
+#endif
+    if (dirfd < 0)
+        return -1;
+
     fd = mkstemp(temp);
-    if (fd < 0) return -1;
-    if (fchmod(fd, 0600) != 0 || (f = fdopen(fd, "w")) == NULL) {
-        saved = errno; close(fd); unlink(temp); errno = saved; return -1;
+    if (fd < 0) {
+        saved = errno;
+        close(dirfd);
+        errno = saved;
+        return -1;
     }
-    rc = write_data(f, data);
-    if (rc == 0 && fflush(f) != 0) rc = -1;
-    if (rc == 0 && fsync(fd) != 0) rc = -1;
-    saved = errno;
-    if (fclose(f) != 0) rc = -1;
-    if (rc == 0 && rename(temp, path) != 0) rc = -1;
-    if (rc == 0) {
-        int dfd = open(db_dir, O_RDONLY);
-        if (dfd >= 0) { if (fsync(dfd) != 0) rc = -1; close(dfd); }
+    if (fchmod(fd, 0600) != 0) {
+        saved = errno;
+        close(fd);
+        unlink(temp);
+        close(dirfd);
+        errno = saved;
+        return -1;
     }
-    if (rc != 0) unlink(temp);
-    errno = saved;
+    f = fdopen(fd, "w");
+    if (!f) {
+        saved = errno;
+        close(fd);
+        unlink(temp);
+        close(dirfd);
+        errno = saved;
+        return -1;
+    }
+
+    if (write_data(f, data) != 0 || fflush(f) != 0 || fsync(fd) != 0) {
+        saved = errno ? errno : EIO;
+        (void)fclose(f);
+        (void)unlink(temp);
+        (void)close(dirfd);
+        errno = saved;
+        return -1;
+    }
+    if (fclose(f) != 0) {
+        saved = errno ? errno : EIO;
+        (void)unlink(temp);
+        (void)close(dirfd);
+        errno = saved;
+        return -1;
+    }
+    f = NULL;
+
+    if (rename(temp, path) != 0) {
+        saved = errno;
+        (void)unlink(temp);
+        (void)close(dirfd);
+        errno = saved;
+        return -1;
+    }
+
+    /* From this point onward the new file is visible: never report a
+     * pre-commit failure, and callers must not roll back PF as if it were not. */
+    if (fsync(dirfd) != 0) {
+        saved = errno ? errno : EIO;
+        (void)close(dirfd);
+        errno = saved;
+        return -2;
+    }
+    if (close(dirfd) != 0) {
+        saved = errno ? errno : EIO;
+        errno = saved;
+        return -2;
+    }
+    rc = 0;
     return rc;
 }
 
