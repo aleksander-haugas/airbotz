@@ -90,8 +90,11 @@ int main(void)
     ssh_process();
     assert(count_text(output_path, "auth_failure from") == 3);
 
-    /* copytruncate: truncate the same inode and make it smaller than our offset. */
-    write_file(log_path, long_event, 0);
+    /*
+     * copytruncate: append and consume a long record first, then truncate
+     * the same inode to a shorter record so size < previous read offset.
+     */
+    write_file(log_path, long_event, 1);
     ssh_process();
     assert(count_text(output_path, "auth_failure from") == 4);
     write_file(log_path, short_event, 0);
