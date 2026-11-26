@@ -19,7 +19,11 @@ int storage_init(const char *directory);
 int storage_load_permanent(char ips[][STORAGE_IP_LEN], size_t capacity, size_t *count);
 int storage_load_temporary(struct storage_temporary *entries, size_t capacity, size_t *count);
 
-/* Save functions replace the complete corresponding list atomically. */
+/* Save functions replace the complete corresponding list atomically.
+ * Return 0 when the file and directory entry are durable; -1 if the
+ * destination was not replaced; -2 if rename succeeded but directory
+ * fsync/close failed, so the replacement is visible but durability is
+ * uncertain. Callers must treat -2 as committed-but-uncertain, not rollback. */
 int storage_save_permanent(const char ips[][STORAGE_IP_LEN], size_t count);
 int storage_save_temporary(const struct storage_temporary *entries, size_t count);
 
