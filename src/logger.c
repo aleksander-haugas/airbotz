@@ -13,6 +13,6 @@ void logger_log(const char *level,const char *fmt,...) {
     localtime_r(&now,&tmv); strftime(stamp,sizeof(stamp),"%Y-%m-%dT%H:%M:%S",&tmv);
     fprintf(out,"%s [%s] ",stamp,level?level:"INFO");
     va_start(ap,fmt); vfprintf(out,fmt,ap); va_end(ap);
-    fputc('\\n',out); fflush(out);
+    fputc('\n',out); fflush(out);
 }
 void logger_close(void) { if (out && out!=stderr) fclose(out); out=NULL; }

@@ -7,11 +7,11 @@ static char *trim(char *s) {
     char *e;
     while (isspace((unsigned char)*s)) s++;
     e=s+strlen(s);
-    while (e>s && isspace((unsigned char)e[-1])) *--e='\\0';
+    while (e>s && isspace((unsigned char)e[-1])) *--e='\0';
     return s;
 }
 int config_load(const char *path, struct ab_config *c) {
-    FILE *f; char line[1024]; unsigned n=0;
+    FILE *f; char line[1024];
     if (!path || !c) return -1;
     memset(c,0,sizeof(*c));
     snprintf(c->ssh_log,sizeof(c->ssh_log),"/var/log/auth.log");
@@ -20,13 +20,17 @@ int config_load(const char *path, struct ab_config *c) {
     c->poll_interval=1; c->enable_pf=1;
     f=fopen(path,"r"); if (!f) return -1;
     while (fgets(line,sizeof(line),f)) {
-        char *p=trim(line), *eq, *k, *v; n++;
+        char *p=trim(line), *eq, *k, *v;
         if (!*p || *p=='#') continue;
         eq=strchr(p,'='); if (!eq) { fclose(f); return -1; }
-        *eq='\\0'; k=trim(p); v=trim(eq+1);
-        if (!strcmp(k,"ssh_log")) snprintf(c->ssh_log,sizeof(c->ssh_log),"%s",v);
-        else if (!strcmp(k,"log_file")) snprintf(c->log_file,sizeof(c->log_file),"%s",v);
-        else if (!strcmp(k,"pf_table")) {
+        *eq='\0'; k=trim(p); v=trim(eq+1);
+        if (!strcmp(k,"ssh_log")) {
+            if (strlen(v)>=sizeof(c->ssh_log)) { fclose(f); return -1; }
+            snprintf(c->ssh_log,sizeof(c->ssh_log),"%s",v);
+        } else if (!strcmp(k,"log_file")) {
+            if (strlen(v)>=sizeof(c->log_file)) { fclose(f); return -1; }
+            snprintf(c->log_file,sizeof(c->log_file),"%s",v);
+        } else if (!strcmp(k,"pf_table")) {
             if (strlen(v)>=sizeof(c->pf_table)) { fclose(f); return -1; }
             snprintf(c->pf_table,sizeof(c->pf_table),"%s",v);
         } else if (!strcmp(k,"poll_interval")) {
@@ -39,7 +43,7 @@ int config_load(const char *path, struct ab_config *c) {
             else { fclose(f); return -1; }
         } else { fclose(f); return -1; }
     }
-    (void)n; fclose(f);
-    if (!c->ssh_log[0] || !c->log_file[0] || !c->pf_table[0]) return -1;
-    return 0;
+    if (ferror(f)) { fclose(f); return -1; }
+    fclose(f);
+    return c->ssh_log[0] && c->log_file[0] && c->pf_table[0] ? 0 : -1;
 }
