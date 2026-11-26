@@ -1,3 +1,4 @@
+#define AIRBOTZ_STORAGE_TESTING
 #include "storage.h"
 #include <assert.h>
 #include <stdio.h>
@@ -35,6 +36,19 @@ int main(void)
     assert(got[0].expires_at == temp[0].expires_at);
     assert(strcmp(got[1].ip, temp[1].ip) == 0);
     assert(got[1].expires_at == temp[1].expires_at);
+
+
+    /* A failed directory fsync happens after rename: the new file is visible,
+     * and the API must report committed-but-durability-uncertain (-2). */
+    {
+        char uncertain[4][STORAGE_IP_LEN];
+        snprintf(uncertain[0], sizeof(uncertain[0]), "203.0.113.77");
+        storage_test_fail_directory_fsync(1);
+        assert(storage_save_permanent((const char (*)[STORAGE_IP_LEN])uncertain, 1) == -2);
+        storage_test_fail_directory_fsync(0);
+        assert(storage_load_permanent(loaded, 4, &count) == 0 && count == 1);
+        assert(strcmp(loaded[0], uncertain[0]) == 0);
+    }
 
     assert(storage_save_permanent(NULL, 0) == 0);
     assert(storage_load_permanent(loaded, 4, &count) == 0 && count == 0);
