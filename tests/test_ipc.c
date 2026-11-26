@@ -1,6 +1,9 @@
 #include "ipc.h"
 
 #include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <signal.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -15,7 +18,7 @@ test_handler(const char *request, char *response, size_t size, void *context)
     (void)context;
     if (strcmp(request, "PING") != 0)
         return -1;
-    if (snprintf(response, size, "OK pong\\n") >= (int)size)
+    if (snprintf(response, size, "OK pong\n") >= (int)size)
         return -1;
     return 0;
 }
@@ -41,7 +44,7 @@ main(void)
     }
     if (lstat(path, &st) != 0 || !S_ISSOCK(st.st_mode) ||
         (st.st_mode & 0777) != 0600 || st.st_uid != 0) {
-        fprintf(stderr, "FAIL: socket ownership or permissions\\n");
+        fprintf(stderr, "FAIL: socket ownership or permissions\n");
         ipc_shutdown();
         return 1;
     }
@@ -62,8 +65,8 @@ main(void)
     }
 
     if (ipc_client_request(path, "PING", response, sizeof(response)) != 0 ||
-        strcmp(response, "OK pong\\n") != 0) {
-        fprintf(stderr, "FAIL: IPC client/server round trip: %s\\n", response);
+        strcmp(response, "OK pong\n") != 0) {
+        fprintf(stderr, "FAIL: IPC client/server round trip: %s\n", response);
         (void)kill(child, SIGTERM);
         (void)waitpid(child, NULL, 0);
         ipc_shutdown();
@@ -71,7 +74,7 @@ main(void)
     }
     if (waitpid(child, &status, 0) < 0 || !WIFEXITED(status) ||
         WEXITSTATUS(status) != 0) {
-        fprintf(stderr, "FAIL: IPC server child did not exit cleanly\\n");
+        fprintf(stderr, "FAIL: IPC server child did not exit cleanly\n");
         ipc_shutdown();
         return 1;
     }
