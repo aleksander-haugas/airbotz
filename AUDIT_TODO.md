@@ -12,7 +12,7 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` verified and closed.
   - [x] S1.a Identify unchecked directory-open/fsync errors.
   - [x] S1.b Identify ambiguous failure after successful rename.
   - [~] S1.c Implement explicit result semantics: 0 = durable, -1 = not replaced, -2 = renamed but directory durability uncertain. Address Manager uses -3 for committed-but-uncertain and keeps PF/memory aligned. Commits: `044739b`, `b22f099`, `5c27940`, `690d8a3`.
-  - [~] S1.d Add deterministic fault-injection tests. Directory-fsync failure injection and focused tests added; write/flush/file-fsync/close/rename failure injection remains. Removed duplicate test macro definitions after FreeBSD emitted warnings.
+  - [~] S1.d Expanded deterministic fault injection to write-stage, flush, file-fsync, file-close, rename, directory-fsync and directory-close paths. Pre-rename tests assert the prior file remains intact; post-rename tests assert the replacement is visible with an uncertain result. Awaiting FreeBSD execution of this expanded suite.
   - [~] S1.e Add tests proving uncertain post-rename save does not roll PF back and memory follows visible storage. Also corrected startup restore to finish reapplying live PF entries before returning the durability warning. Awaiting FreeBSD execution. Commits: `5b9e5e9`, `640447e`, `c37410c`, `41f10cc`, `0e89f0e`, `76823a9`.
 - [ ] S2. Harden synchronization and error reporting for persistent files.
 - [ ] S3. Ensure consistency between storage, in-memory state, and PF on all failure paths.
