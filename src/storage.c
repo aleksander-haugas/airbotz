@@ -16,16 +16,6 @@
 
 static char db_dir[512];
 
-enum {
-    STORAGE_TEST_FAIL_NONE = 0,
-    STORAGE_TEST_FAIL_WRITE,
-    STORAGE_TEST_FAIL_FLUSH,
-    STORAGE_TEST_FAIL_FILE_FSYNC,
-    STORAGE_TEST_FAIL_FILE_CLOSE,
-    STORAGE_TEST_FAIL_RENAME,
-    STORAGE_TEST_FAIL_DIRECTORY_FSYNC,
-    STORAGE_TEST_FAIL_DIRECTORY_CLOSE
-};
 #ifdef AIRBOTZ_STORAGE_TESTING
 static int test_fail_stage;
 void storage_test_fail_stage(int stage)
