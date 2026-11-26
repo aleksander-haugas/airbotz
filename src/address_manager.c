@@ -55,13 +55,28 @@ address_manager_restore(struct address_manager *m)
     if (!m || (now = time(NULL)) == (time_t)-1) return -1;
     for (i = 0; i < m->temporary_count; i++) {
         if (m->temporary[i].expires_at <= now) {
+            if (m->pf_enabled && m->ops.temp_delete(m->temporary[i].ip) != 0) {
+                size_t j;
+                for (j = 0; j < i; j++)
+                    if (m->temporary[j].expires_at <= now &&
+                        m->ops.temp_add(m->temporary[j].ip) != 0)
+                        return -2;
+                return -1;
+            }
             changed = 1;
         } else {
             valid[count++] = m->temporary[i];
         }
     }
     if (changed) {
-        if (storage_save_temporary(valid, count) != 0) return -1;
+        if (storage_save_temporary(valid, count) != 0) {
+            if (m->pf_enabled)
+                for (i = 0; i < m->temporary_count; i++)
+                    if (m->temporary[i].expires_at <= now &&
+                        m->ops.temp_add(m->temporary[i].ip) != 0)
+                        return -2;
+            return -1;
+        }
         memcpy(m->temporary, valid, count * sizeof(valid[0]));
         m->temporary_count = count;
     }
