@@ -83,6 +83,17 @@ int main(void)
     assert(manager.permanent_count == 0 && fake_perm_count == 0);
 
     {
+        struct storage_temporary expired_entry;
+        snprintf(expired_entry.ip, sizeof(expired_entry.ip), "203.0.113.9");
+        expired_entry.expires_at = now - 1;
+        assert(storage_save_temporary(&expired_entry, 1) == 0);
+        assert(t_add(expired_entry.ip) == 0);
+        assert(address_manager_init(&reloaded, &ops, 1) == 0);
+        assert(address_manager_restore(&reloaded) == 0);
+        assert(reloaded.temporary_count == 0 && fake_temp_count == 0);
+    }
+
+    {
         char path[512];
         snprintf(path, sizeof(path), "%s/permanent.list", dir); unlink(path);
         snprintf(path, sizeof(path), "%s/temporary.list", dir); unlink(path);
