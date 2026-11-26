@@ -53,7 +53,18 @@ int main(void)
         "sshd: Failed password for deliberately-very-long-test-account-name-"
         "to-force-a-large-file-offset from 192.0.2.4 port 22 ssh2\n";
     const char *short_event =
-        "sshd: Failed password for x from 192.0.2.5 port 22 ssh2\n";
+        "sshd: Failed password for x from 192.0.2.5 port 22 ssh2\\n";
+    const char *regrown_event =
+        "sshd: Failed password for rewritten-"
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        " from 192.0.2.6 port 22 ssh2\\n";
+    const char *event4 =
+        "sshd: Failed password for root from 192.0.2.7 port 22 ssh2\\n";
     int fd;
 
     assert(mkdtemp(dir) != NULL);
@@ -77,11 +88,12 @@ int main(void)
     ssh_process();
     assert(count_text(output_path, "auth_failure from") == 1);
 
-    /* newsyslog-style rename/create rotation. */
+    /* Drain pending records from the renamed file before following its replacement. */
+    write_file(log_path, event2, 1);
     assert(rename(log_path, rotated_path) == 0);
-    write_file(log_path, event2, 0);
+    write_file(log_path, event4, 0);
     ssh_process();
-    assert(count_text(output_path, "auth_failure from") == 2);
+    assert(count_text(output_path, "auth_failure from") == 4);
 
     /* A temporarily missing pathname must recover when a new file appears. */
     assert(rename(log_path, missing_path) == 0);
@@ -96,12 +108,21 @@ int main(void)
      */
     write_file(log_path, long_event, 1);
     ssh_process();
-    assert(count_text(output_path, "auth_failure from") == 4);
+    assert(count_text(output_path, "auth_failure from") == 5);
     write_file(log_path, short_event, 0);
     ssh_process();
-    assert(count_text(output_path, "auth_failure from") == 5);
+    assert(count_text(output_path, "auth_failure from") == 6);
     ssh_process();
-    assert(count_text(output_path, "auth_failure from") == 5);
+    assert(count_text(output_path, "auth_failure from") == 6);
+
+    /* Truncate and regrow beyond the old offset between polls. */
+    write_file(log_path, long_event, 1);
+    ssh_process();
+    assert(count_text(output_path, "auth_failure from") == 7);
+    assert(strlen(regrown_event) > strlen(short_event) + strlen(long_event));
+    write_file(log_path, regrown_event, 0);
+    ssh_process();
+    assert(count_text(output_path, "auth_failure from") == 8);
 
     ssh_shutdown();
     logger_close();
@@ -111,6 +132,6 @@ int main(void)
     assert(unlink(missing_path) == 0);
     assert(unlink(output_path) == 0);
     assert(rmdir(dir) == 0);
-    puts("PASS: SSH log initial offset, append, rename/create, missing-path recovery and copytruncate");
+    puts("PASS: SSH log initial offset, append, rename drain, missing-path recovery and copytruncate/regrowth");
     return 0;
 }
