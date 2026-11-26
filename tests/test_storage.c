@@ -37,6 +37,9 @@ int main(void)
     storage_test_fail_stage(STORAGE_TEST_FAIL_NONE);
     assert(storage_load_permanent(loaded, 4, &count) == 0 && count == 2);
 
+    storage_test_fail_stage(STORAGE_TEST_FAIL_READ_CLOSE);
+    assert(storage_load_temporary(got, 2, &count) == -1);
+    storage_test_fail_stage(STORAGE_TEST_FAIL_NONE);
     assert(storage_load_temporary(got, 2, &count) == 0 && count == 2);
     assert(strcmp(got[0].ip, temp[0].ip) == 0);
     assert(got[0].expires_at == temp[0].expires_at);
