@@ -26,10 +26,10 @@ tests/test_ssh_rotation: tests/test_ssh_rotation.c src/ssh/ssh.c src/ssh/ssh_par
 	$(CC) $(CFLAGS) -o $@ tests/test_ssh_rotation.c src/ssh/ssh.c src/ssh/ssh_parser.c src/logger.c
 
 tests/test_storage: tests/test_storage.c src/storage.c src/pf/pf.c
-	$(CC) $(CFLAGS) -o $@ tests/test_storage.c src/storage.c src/pf/pf.c
+	$(CC) $(CFLAGS) -DAIRBOTZ_STORAGE_TESTING -o $@ tests/test_storage.c src/storage.c src/pf/pf.c
 
 tests/test_address_manager: tests/test_address_manager.c src/address_manager.c src/storage.c src/pf/pf.c
-	$(CC) $(CFLAGS) -o $@ tests/test_address_manager.c src/address_manager.c src/storage.c src/pf/pf.c
+	$(CC) $(CFLAGS) -DAIRBOTZ_STORAGE_TESTING -o $@ tests/test_address_manager.c src/address_manager.c src/storage.c src/pf/pf.c
 
 tests/test_ipc: tests/test_ipc.c src/ipc.c
 	$(CC) $(CFLAGS) -o $@ tests/test_ipc.c src/ipc.c
