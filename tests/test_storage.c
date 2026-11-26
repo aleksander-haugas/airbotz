@@ -114,7 +114,7 @@ int main(void)
         snprintf(path, sizeof(path), "%s/permanent.list", init_dir);
         assert(unlink(path) == 0);
         snprintf(path, sizeof(path), "%s/temporary.list", init_dir);
-        assert(unlink(path) == 0);
+        (void)unlink(path); /* The injected first close can stop initialization early. */
         assert(rmdir(init_dir) == 0);
     }
     puts("PASS: storage permissions, IPv4/IPv6 lists, UTC expiry, atomic replacement and validation");
