@@ -1,3 +1,4 @@
+#define _XOPEN_SOURCE 700
 #include "storage.h"
 #include "pf.h"
 
@@ -11,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <stdint.h>
 
 static char db_dir[512];
 
@@ -83,9 +85,31 @@ static int parse_expiry(const char *s, time_t *value)
     memset(&tmv, 0, sizeof(tmv));
     end = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tmv);
     if (!end || *end != '\0') return -1;
-    tmv.tm_isdst = 0;
-    *value = timegm(&tmv);
-    return *value == (time_t)-1 ? -1 : 0;
+    {
+        int year = tmv.tm_year + 1900;
+        int month = tmv.tm_mon + 1;
+        int day = tmv.tm_mday;
+        int64_t era, yoe, doy, doe, days, seconds;
+        struct tm check;
+
+        if (month < 1 || month > 12 || day < 1 || day > 31 ||
+            tmv.tm_hour > 23 || tmv.tm_min > 59 || tmv.tm_sec > 59)
+            return -1;
+        year -= month <= 2;
+        era = (year >= 0 ? year : year - 399) / 400;
+        yoe = year - era * 400;
+        doy = (153 * (month + (month > 2 ? -3 : 9)) + 2) / 5 + day - 1;
+        doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+        days = era * 146097 + doe - 719468;
+        seconds = days * 86400 + tmv.tm_hour * 3600 + tmv.tm_min * 60 + tmv.tm_sec;
+        *value = (time_t)seconds;
+        if ((int64_t)*value != seconds || !gmtime_r(value, &check) ||
+            check.tm_year != tmv.tm_year || check.tm_mon != tmv.tm_mon ||
+            check.tm_mday != tmv.tm_mday || check.tm_hour != tmv.tm_hour ||
+            check.tm_min != tmv.tm_min || check.tm_sec != tmv.tm_sec)
+            return -1;
+    }
+    return 0;
 }
 
 int storage_load_permanent(char ips[][STORAGE_IP_LEN], size_t capacity, size_t *count)
