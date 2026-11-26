@@ -219,7 +219,10 @@ int main(void)
         assert(storage_save_permanent((const char (*)[STORAGE_IP_LEN])permanent, 2) == 0);
         assert(storage_save_temporary(entries, 2) == 0);
 
-        /* Simulate a table member which predates this restore. */
+        /* Isolate this scenario, then simulate a table member which
+         * predates this restore. */
+        fake_perm_count = 0;
+        fake_temp_count = 0;
         assert(p_add("203.0.113.200") == 0);
         assert(address_manager_init(&reloaded, &ops, 1) == 0);
         fail_temp_add = 1;
