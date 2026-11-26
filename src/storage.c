@@ -210,7 +210,7 @@ int storage_load_temporary(struct storage_temporary *entries, size_t capacity, s
     fd = secure_file(path, 0);
     if (fd < 0) return -1;
     f = fdopen(fd, "r");
-    if (!f) { close(fd); return -1; }
+    if (!f) { storage_cleanup_fd(fd); return -1; }
     while (fgets(line, sizeof(line), f)) {
         time_t when;
         if (sscanf(line, "%45s %31s %c", ip, expiry, &extra) != 2 ||
@@ -219,7 +219,7 @@ int storage_load_temporary(struct storage_temporary *entries, size_t capacity, s
         snprintf(entries[used].ip, sizeof(entries[used].ip), "%s", ip);
         entries[used++].expires_at = when;
     }
-    if (ferror(f)) { fclose(f); return -1; }
+    if (ferror(f)) { storage_cleanup_stream(f); return -1; }
     if (storage_close_stream(f, STORAGE_TEST_FAIL_READ_CLOSE) != 0) return -1;
     *count = used;
     return 0;
