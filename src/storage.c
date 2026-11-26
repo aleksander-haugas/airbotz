@@ -34,6 +34,34 @@ static int storage_test_should_fail(int stage)
 }
 #endif
 
+static int storage_close_fd(int fd, int stage)
+{
+    int rc = close(fd);
+#ifdef AIRBOTZ_STORAGE_TESTING
+    if (storage_test_should_fail(stage)) {
+        errno = EIO;
+        return -1;
+    }
+#else
+    (void)stage;
+#endif
+    return rc;
+}
+
+static int storage_close_stream(FILE *stream, int stage)
+{
+    int rc = fclose(stream);
+#ifdef AIRBOTZ_STORAGE_TESTING
+    if (storage_test_should_fail(stage)) {
+        errno = EIO;
+        return -1;
+    }
+#else
+    (void)stage;
+#endif
+    return rc;
+}
+
 struct permanent_data { const char (*ips)[STORAGE_IP_LEN]; size_t count; };
 struct temporary_data { const struct storage_temporary *entries; size_t count; };
 static const char *permanent_name = "permanent.list";
@@ -88,11 +116,11 @@ int storage_init(const char *directory)
     if (make_path(path, sizeof(path), permanent_name) != 0) return -1;
     fd = secure_file(path, 1);
     if (fd < 0) return -1;
-    close(fd);
+    if (storage_close_fd(fd, STORAGE_TEST_FAIL_INIT_CLOSE) != 0) return -1;
     if (make_path(path, sizeof(path), temporary_name) != 0) return -1;
     fd = secure_file(path, 1);
     if (fd < 0) return -1;
-    close(fd);
+    if (storage_close_fd(fd, STORAGE_TEST_FAIL_INIT_CLOSE) != 0) return -1;
     return 0;
 }
 
@@ -151,7 +179,7 @@ int storage_load_permanent(char ips[][STORAGE_IP_LEN], size_t capacity, size_t *
         memcpy(ips[used++], line, len + 1);
     }
     if (ferror(f)) { fclose(f); return -1; }
-    fclose(f);
+    if (storage_close_stream(f, STORAGE_TEST_FAIL_READ_CLOSE) != 0) return -1;
     *count = used;
     return 0;
 }
@@ -178,7 +206,7 @@ int storage_load_temporary(struct storage_temporary *entries, size_t capacity, s
         entries[used++].expires_at = when;
     }
     if (ferror(f)) { fclose(f); return -1; }
-    fclose(f);
+    if (storage_close_stream(f, STORAGE_TEST_FAIL_READ_CLOSE) != 0) return -1;
     *count = used;
     return 0;
 }
