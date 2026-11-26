@@ -144,7 +144,7 @@ refresh_log_file(void)
     }
 }
 
-int
+void
 ssh_process(void)
 {
     if (!logf)
