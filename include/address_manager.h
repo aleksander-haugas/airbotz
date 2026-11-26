@@ -20,8 +20,11 @@ struct address_manager {
 };
 
 /* storage_init() must have succeeded before this call.
- * Operations return 0 on success, -1 on failure with rollback attempted,
- * and -2 if a PF rollback also fails and enforcement state may be inconsistent. */
+ * Operations return 0 on durable success, -1 on pre-commit failure (PF
+ * rollback attempted), -2 if a PF rollback also fails, and -3 if the
+ * storage replacement committed but directory durability is uncertain.
+ * On -3, in-memory state follows the visible replacement and PF is not rolled
+ * back; callers must report the uncertain durability to the operator. */
 int address_manager_init(struct address_manager *manager,
                          const struct address_manager_ops *ops,
                          int pf_enabled);
