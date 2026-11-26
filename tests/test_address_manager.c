@@ -109,6 +109,32 @@ int main(void)
         assert(reloaded.temporary_count == 0 && fake_temp_count == 0);
     }
 
+    /* Restore must finish reapplying live PF entries even when pruning
+     * expired entries committed with uncertain directory durability. */
+    {
+        struct storage_temporary entries[2];
+        char permanent[1][STORAGE_IP_LEN];
+
+        snprintf(permanent[0], sizeof(permanent[0]), "203.0.113.44");
+        snprintf(entries[0].ip, sizeof(entries[0].ip), "203.0.113.9");
+        entries[0].expires_at = now - 1;
+        snprintf(entries[1].ip, sizeof(entries[1].ip), "203.0.113.10");
+        entries[1].expires_at = now + 300;
+        assert(storage_save_permanent((const char (*)[STORAGE_IP_LEN])permanent, 1) == 0);
+        assert(storage_save_temporary(entries, 2) == 0);
+        assert(t_add(entries[0].ip) == 0);
+
+        storage_test_fail_directory_fsync(1);
+        assert(address_manager_init(&reloaded, &ops, 1) == 0);
+        assert(address_manager_restore(&reloaded) == -3);
+        storage_test_fail_directory_fsync(0);
+
+        assert(reloaded.permanent_count == 1);
+        assert(reloaded.temporary_count == 1);
+        assert(fake_perm_count == 1 && !strcmp(fake_perm[0], permanent[0]));
+        assert(fake_temp_count == 1 && !strcmp(fake_temp[0], entries[1].ip));
+    }
+
     {
         char path[512];
         snprintf(path, sizeof(path), "%s/permanent.list", dir); unlink(path);
