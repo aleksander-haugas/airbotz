@@ -80,4 +80,6 @@ SSH events; automatic blocking remains disabled.
 ## Design
 
 main -> core lifecycle -> config/logger/storage/PF/SSH modules.
-The SSH module observes and classifies; policy and enforcement remain separate.\nThe address manager exposes explicit add/delete/expiry operations for future\nCLI or API integration. These operations are not triggered by SSH events.
+The SSH module observes and classifies; policy and enforcement remain separate.
+The address manager exposes explicit add/delete/expiry operations for future
+CLI or API integration. These operations are not triggered by SSH events.
