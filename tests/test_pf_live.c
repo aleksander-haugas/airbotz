@@ -29,7 +29,8 @@ static int address_present(const char *table) {
             TEST_IP, NULL
         };
         close(output_pipe[0]);
-        if (dup2(output_pipe[1], STDOUT_FILENO) < 0)
+        if (dup2(output_pipe[1], STDOUT_FILENO) < 0 ||
+            dup2(output_pipe[1], STDERR_FILENO) < 0)
             _exit(126);
         close(output_pipe[1]);
         execv("/sbin/pfctl", args);
