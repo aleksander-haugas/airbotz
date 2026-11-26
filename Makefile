@@ -51,4 +51,4 @@ install: airbotz
 	install -m 0640 config/airbotz.conf $(DESTDIR)$(PREFIX)/etc/airbotz/airbotz.conf.sample
 	install -m 0555 rc.d/airbotz $(DESTDIR)$(PREFIX)/etc/rc.d/airbotz
 
-.PHONY: all clean test test-pf-live install
+.PHONY: all clean test test-pf-live test_address_manager install
