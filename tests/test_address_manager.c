@@ -63,6 +63,15 @@ int main(void)
     fail_perm_add = 0;
     assert(manager.permanent_count == 1);
 
+    {
+        char moved[512];
+        snprintf(moved, sizeof(moved), "%s.moved", dir);
+        assert(rename(dir, moved) == 0);
+        assert(address_manager_add_permanent(&manager, "198.51.100.3") == -1);
+        assert(manager.permanent_count == 1 && fake_perm_count == 1);
+        assert(rename(moved, dir) == 0);
+    }
+
     fail_temp_delete = 1;
     assert(address_manager_delete_temporary(&manager, "2001:db8::10") == -1);
     fail_temp_delete = 0;
