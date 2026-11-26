@@ -27,8 +27,8 @@ int storage_load_temporary(struct storage_temporary *entries, size_t capacity, s
 int storage_save_permanent(const char ips[][STORAGE_IP_LEN], size_t count);
 int storage_save_temporary(const struct storage_temporary *entries, size_t count);
 
-#ifdef AIRBOTZ_STORAGE_TESTING
-/* Test-only deterministic fault injection; not present in production builds. */
+/* Internal stage identifiers are harmless in production builds; the
+ * setter that activates fault injection exists only in test builds. */
 enum storage_test_failure {
     STORAGE_TEST_FAIL_NONE = 0,
     STORAGE_TEST_FAIL_WRITE,
@@ -39,6 +39,7 @@ enum storage_test_failure {
     STORAGE_TEST_FAIL_DIRECTORY_FSYNC,
     STORAGE_TEST_FAIL_DIRECTORY_CLOSE
 };
+#ifdef AIRBOTZ_STORAGE_TESTING
 void storage_test_fail_stage(int stage);
 #endif
 
