@@ -38,8 +38,8 @@ core_init(const char *path)
     logger_ready = 1;
 
     if (cfg.enable_pf) {
-        if (pf_init(cfg.pf_table) != 0) {
-            logger_log("ERROR", "Invalid PF table name");
+        if (pf_init(cfg.pf_temp_table, cfg.pf_perm_table) != 0) {
+            logger_log("ERROR", "Invalid or duplicate PF table names");
             core_shutdown();
             return -1;
         }
