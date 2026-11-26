@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <signal.h>
 
 #define IPC_REQUEST_SIZE 256
 
@@ -52,6 +53,7 @@ ipc_init(const char *path, ipc_request_handler handler, void *context)
         return -1;
     }
 
+    (void)signal(SIGPIPE, SIG_IGN);
     listen_fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (listen_fd < 0) return -1;
 
