@@ -31,7 +31,7 @@ tests/test_storage: tests/test_storage.c src/storage.c src/pf/pf.c
 clean:
 	rm -f $(OBJ) airbotz tests/test_ssh tests/test_pf tests/test_pf_live tests/test_ssh_rotation tests/test_storage
 
-test: airbotz tests/test_ssh tests/test_pf tests/test_ssh_rotation
+test: airbotz tests/test_ssh tests/test_pf tests/test_ssh_rotation tests/test_storage
 	./tests/test_ssh
 	./tests/test_pf
 	./tests/test_ssh_rotation
