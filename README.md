@@ -8,7 +8,8 @@ Minimal FreeBSD security daemon focused exclusively on PF and SSH.
 - SSH authentication log tailing and event classification.
 - IPv4/IPv6 validation with `inet_pton`.
 - Persistent permanent and expiring temporary IP lists.
-- Transactional address-management module with PF rollback on persistence failures.
+- Transactional address management with PF rollback on persistence failures.
+- Root-only local Unix socket control interface.
 - Small configuration, logging, signal handling and clean shutdown.
 
 No web panel, REST API, Nginx/FTP parsers, AI integration, generic rule engine,
@@ -23,7 +24,21 @@ On FreeBSD:
 
 Run in the foreground while developing:
 
-    ./airbotz -c config/airbotz.conf
+    sudo ./airbotz -c config/airbotz.conf
+
+The daemon stays in the foreground. Control commands use its local socket:
+
+    sudo ./airbotz status
+    sudo ./airbotz ip list
+    sudo ./airbotz ip add 192.0.2.10 permanent
+    sudo ./airbotz ip add 192.0.2.20 temporary 3600
+    sudo ./airbotz ip remove 192.0.2.10 permanent
+    sudo ./airbotz ip remove 192.0.2.20 temporary
+
+The control socket defaults to `/var/run/airbotz.sock`, is created with
+root-only permissions (0600), and checks the connecting process credentials.
+The CLI sends requests to the daemon; it never modifies PF or persistence
+directly. Temporary durations are limited to 1 through 31,536,000 seconds.
 
 ## Install as a FreeBSD service
 
@@ -61,6 +76,9 @@ It uses the existing tables configured in /etc/pf.conf:
 - `pf_temp_table=airbotz_temp`
 - `pf_perm_table=airbotz_perm`
 
+The local control socket is configured with `socket_path` and defaults to
+`/var/run/airbotz.sock`.
+
 The persistence directory defaults to `/var/db/airbotz` and can be changed
 with `storage_dir`:
 
@@ -79,7 +97,7 @@ SSH events; automatic blocking remains disabled.
 
 ## Design
 
-main -> core lifecycle -> config/logger/storage/PF/SSH modules.
+main -> core lifecycle -> config/logger/storage/PF/SSH/address manager/IPC.
 The SSH module observes and classifies; policy and enforcement remain separate.
-The address manager exposes explicit add/delete/expiry operations for future
-CLI or API integration. These operations are not triggered by SSH events.
+The address manager is the sole owner of managed IP state. CLI requests are
+validated and handled inside the daemon's event loop.
