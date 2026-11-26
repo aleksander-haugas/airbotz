@@ -265,6 +265,22 @@ int main(void)
         assert(!strcmp(fake_temp[0], entries[0].ip));
         assert(!strcmp(fake_temp[1], entries[1].ip));
 
+        /* If the compensating add also fails, report unresolved divergence. */
+        temp_delete_calls = 0;
+        fail_temp_delete_on_call = 2;
+        fail_temp_add = 1;
+        assert(address_manager_expire(&reloaded, now + 30, &expired) == -2);
+        fail_temp_add = 0;
+        fail_temp_delete_on_call = 0;
+        assert(reloaded.temporary_count == 2);
+        assert(fake_temp_count == 1);
+        assert(t_add(entries[0].ip) == 0);
+
+        /* Rebuild a deterministic PF fixture for the storage-failure case. */
+        fake_temp_count = 0;
+        assert(t_add(entries[0].ip) == 0);
+        assert(t_add(entries[1].ip) == 0);
+
         snprintf(moved, sizeof(moved), "%s.expire-rollback", dir);
         assert(rename(dir, moved) == 0);
         assert(address_manager_expire(&reloaded, now + 30, &expired) == -1);
