@@ -15,10 +15,12 @@ load_rc_config "$name"
 : ${airbotz_enable:="NO"}
 : ${airbotz_config:="/usr/local/etc/airbotz/airbotz.conf"}
 
-command="/usr/local/sbin/airbotz"
-command_args="-c ${airbotz_config}"
-command_background="yes"
+# FreeBSD rc.subr does not implement command_background.
+# Use daemon(8) to detach and maintain the child PID file.
+command="/usr/sbin/daemon"
+command_args="-f -p /var/run/airbotz.pid /usr/local/sbin/airbotz -c ${airbotz_config}"
 pidfile="/var/run/airbotz.pid"
+procname="/usr/local/sbin/airbotz"
 required_files="${airbotz_config}"
 
 run_rc_command "$1"
