@@ -37,16 +37,36 @@ int main(void)
     assert(got[1].expires_at == temp[1].expires_at);
 
 
-    /* A failed directory fsync happens after rename: the new file is visible,
-     * and the API must report committed-but-durability-uncertain (-2). */
+    /* Every injected pre-rename failure must preserve the old destination. */
     {
-        char uncertain[4][STORAGE_IP_LEN];
-        snprintf(uncertain[0], sizeof(uncertain[0]), "203.0.113.77");
+        char candidate[1][STORAGE_IP_LEN];
+        int stage;
+        snprintf(candidate[0], sizeof(candidate[0]), "203.0.113.77");
+        for (stage = STORAGE_TEST_FAIL_WRITE; stage <= STORAGE_TEST_FAIL_RENAME; stage++) {
+            storage_test_fail_stage(stage);
+            assert(storage_save_permanent((const char (*)[STORAGE_IP_LEN])candidate, 1) == -1);
+            storage_test_fail_stage(STORAGE_TEST_FAIL_NONE);
+            assert(storage_load_permanent(loaded, 4, &count) == 0 && count == 2);
+            assert(strcmp(loaded[0], ips[0]) == 0 && strcmp(loaded[1], ips[1]) == 0);
+        }
+
+        /* Directory fsync/close errors occur after rename: the replacement is
+         * visible, but the result must explicitly report uncertain durability. */
         storage_test_fail_stage(STORAGE_TEST_FAIL_DIRECTORY_FSYNC);
-        assert(storage_save_permanent((const char (*)[STORAGE_IP_LEN])uncertain, 1) == -2);
+        assert(storage_save_permanent((const char (*)[STORAGE_IP_LEN])candidate, 1) == -2);
         storage_test_fail_stage(STORAGE_TEST_FAIL_NONE);
         assert(storage_load_permanent(loaded, 4, &count) == 0 && count == 1);
-        assert(strcmp(loaded[0], uncertain[0]) == 0);
+        assert(strcmp(loaded[0], candidate[0]) == 0);
+
+        snprintf(ips[0], sizeof(ips[0]), "192.0.2.10");
+        snprintf(ips[1], sizeof(ips[1]), "2001:db8::10");
+        assert(storage_save_permanent((const char (*)[STORAGE_IP_LEN])ips, 2) == 0);
+
+        storage_test_fail_stage(STORAGE_TEST_FAIL_DIRECTORY_CLOSE);
+        assert(storage_save_permanent((const char (*)[STORAGE_IP_LEN])candidate, 1) == -2);
+        storage_test_fail_stage(STORAGE_TEST_FAIL_NONE);
+        assert(storage_load_permanent(loaded, 4, &count) == 0 && count == 1);
+        assert(strcmp(loaded[0], candidate[0]) == 0);
     }
 
     assert(storage_save_permanent(NULL, 0) == 0);
