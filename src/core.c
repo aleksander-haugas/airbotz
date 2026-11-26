@@ -185,5 +185,4 @@ core_shutdown(void)
         logger_close();
         logger_ready = 0;
     }
-    storage_ready = 0;
 }
