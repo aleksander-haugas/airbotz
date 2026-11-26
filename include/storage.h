@@ -29,7 +29,17 @@ int storage_save_temporary(const struct storage_temporary *entries, size_t count
 
 #ifdef AIRBOTZ_STORAGE_TESTING
 /* Test-only deterministic fault injection; not present in production builds. */
-void storage_test_fail_directory_fsync(int enabled);
+enum storage_test_failure {
+    STORAGE_TEST_FAIL_NONE = 0,
+    STORAGE_TEST_FAIL_WRITE,
+    STORAGE_TEST_FAIL_FLUSH,
+    STORAGE_TEST_FAIL_FILE_FSYNC,
+    STORAGE_TEST_FAIL_FILE_CLOSE,
+    STORAGE_TEST_FAIL_RENAME,
+    STORAGE_TEST_FAIL_DIRECTORY_FSYNC,
+    STORAGE_TEST_FAIL_DIRECTORY_CLOSE
+};
+void storage_test_fail_stage(int stage);
 #endif
 
 #endif
