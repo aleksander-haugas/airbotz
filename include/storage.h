@@ -15,7 +15,10 @@ struct storage_temporary {
 /* Creates/validates a private, owner-only persistence directory. */
 int storage_init(const char *directory);
 
-/* Load functions return 0 on success; capacity overflow or malformed data is an error. */
+/* Load functions return 0 on success; capacity overflow or malformed data is an error.
+ * Storage uses one process-global directory and has no internal locking.
+ * The daemon's current event loop accesses it serially; callers must serialize
+ * access if using these functions from multiple threads or processes. */
 int storage_load_permanent(char ips[][STORAGE_IP_LEN], size_t capacity, size_t *count);
 int storage_load_temporary(struct storage_temporary *entries, size_t capacity, size_t *count);
 
