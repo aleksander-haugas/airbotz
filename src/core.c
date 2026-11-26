@@ -200,10 +200,10 @@ core_init(const char *path)
         int manager_rc = address_manager_init(&addresses, &pf_ops, pf_ready);
         if (manager_rc == 0)
             manager_rc = address_manager_restore(&addresses);
-        if (manager_rc != 0) {
-            logger_log("ERROR", manager_rc == -3 ?
-                "Managed IP expiry cleanup committed, but storage durability is uncertain" :
-                "Cannot initialize or restore managed IP addresses");
+        if (manager_rc == -3) {
+            logger_log("WARN", "Managed IP expiry cleanup committed; storage durability is uncertain");
+        } else if (manager_rc != 0) {
+            logger_log("ERROR", "Cannot initialize or restore managed IP addresses");
             core_shutdown();
             return -1;
         }
