@@ -1,6 +1,6 @@
 PREFIX?=/usr/local
 CC?=cc
-CFLAGS+=-Iinclude -D_POSIX_C_SOURCE=200809L -std=c11 -Wall -Wextra -Wpedantic
+CFLAGS+=-Iinclude -D_POSIX_C_SOURCE=200809L -D_BSD_SOURCE -std=c11 -Wall -Wextra -Wpedantic
 LDFLAGS?=
 SRC=src/main.c src/core.c src/ipc.c src/config.c src/logger.c src/storage.c src/address_manager.c src/pf/pf.c src/ssh/ssh.c src/ssh/ssh_parser.c
 OBJ=$(SRC:.c=.o)
