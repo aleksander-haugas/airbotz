@@ -62,6 +62,29 @@ static int address_present(const char *table) {
     return -1;
 }
 
+static int exercise_snapshot(const char *name,
+                              int (*snapshot_fn)(char entries[][PF_IP_LEN],
+                                                 size_t capacity,
+                                                 size_t *count)) {
+    char entries[PF_SNAPSHOT_MAX_ENTRIES][PF_IP_LEN];
+    size_t count = 0, i;
+
+    if (snapshot_fn(entries, PF_SNAPSHOT_MAX_ENTRIES, &count) != 0) {
+        fprintf(stderr, "FAIL: snapshot of %s failed\\n", name);
+        return -1;
+    }
+    for (i = 0; i < count; i++) {
+        if (!pf_valid_address(entries[i])) {
+            fprintf(stderr, "FAIL: snapshot of %s returned invalid address\\n",
+                    name);
+            return -1;
+        }
+    }
+    printf("PASS: snapshot of %s (%zu entr%s)\\n", name, count,
+           count == 1 ? "y" : "ies");
+    return 0;
+}
+
 static int exercise_table(const char *name,
                           int (*add_fn)(const char *),
                           int (*delete_fn)(const char *)) {
@@ -108,6 +131,11 @@ int main(void) {
         pf_shutdown();
         return 1;
     }
+
+    if (exercise_snapshot("airbotz_temp", pf_temp_snapshot) != 0)
+        failed = 1;
+    if (exercise_snapshot("airbotz_perm", pf_perm_snapshot) != 0)
+        failed = 1;
 
     /*
      * TEST-NET-1 is documentation-only. Refuse to run against a table
