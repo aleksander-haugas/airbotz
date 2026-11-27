@@ -6,6 +6,15 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+
+static void write_bytes(const char *path, const void *data, size_t length)
+{
+    FILE *f = fopen(path, "wb");
+    assert(f != NULL);
+    assert(fwrite(data, 1, length, f) == length);
+    assert(fclose(f) == 0);
+}
+
 int main(void)
 {
     char dir[] = "/tmp/airbotz-storage.XXXXXX";
@@ -103,6 +112,49 @@ int main(void)
         assert(unlink(path) == 0);
     }
     assert(rmdir(dir) == 0);
+
+    /* Reject truncated, overlong and binary records in both persistence files.
+     * Writers always emit newline-terminated text records. */
+    {
+        char path[512];
+        char oversized[300];
+        const char valid_perm[] = "192.0.2.55\n";
+        const char truncated_perm[] = "192.0.2.55";
+        const char binary_perm[] = {'1','9','2','.','0','.','2','.','5','5','\0','\n'};
+        const char valid_temp[] = "192.0.2.56 2026-11-27T00:00:00Z\n";
+        const char truncated_temp[] = "192.0.2.56 2026-11-27T00:00:00Z";
+        const char binary_temp[] = {'1','9','2','.','0','.','2','.','5','6',' ',
+                                    '2','0','2','6','-','1','1','-','2','7','T',
+                                    '0','0',':','0','0',':','0','0','Z','\0','\n'};
+
+        memset(oversized, '7', sizeof(oversized));
+        snprintf(path, sizeof(path), "%s/permanent.list", dir);
+        write_bytes(path, valid_perm, sizeof(valid_perm) - 1);
+        count = 99;
+        assert(storage_load_permanent(loaded, 4, &count) == 0 && count == 1);
+        write_bytes(path, truncated_perm, sizeof(truncated_perm) - 1);
+        count = 99;
+        assert(storage_load_permanent(loaded, 4, &count) == -1 && count == 99);
+        write_bytes(path, oversized, sizeof(oversized));
+        assert(storage_load_permanent(loaded, 4, &count) == -1);
+        write_bytes(path, binary_perm, sizeof(binary_perm));
+        assert(storage_load_permanent(loaded, 4, &count) == -1);
+
+        snprintf(path, sizeof(path), "%s/temporary.list", dir);
+        write_bytes(path, valid_temp, sizeof(valid_temp) - 1);
+        count = 99;
+        assert(storage_load_temporary(got, 2, &count) == 0 && count == 1);
+        write_bytes(path, truncated_temp, sizeof(truncated_temp) - 1);
+        count = 99;
+        assert(storage_load_temporary(got, 2, &count) == -1 && count == 99);
+        write_bytes(path, oversized, sizeof(oversized));
+        assert(storage_load_temporary(got, 2, &count) == -1);
+        write_bytes(path, binary_temp, sizeof(binary_temp));
+        assert(storage_load_temporary(got, 2, &count) == -1);
+        write_bytes(path, "192.0.2.56 2026-02-30T00:00:00Z\n",
+                    sizeof("192.0.2.56 2026-02-30T00:00:00Z\n") - 1);
+        assert(storage_load_temporary(got, 2, &count) == -1);
+    }
 
     /* Initialization must surface close failures instead of silently
      * claiming that both persistence files were initialized successfully. */
