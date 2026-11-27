@@ -138,6 +138,42 @@ int storage_init(const char *directory)
     return 0;
 }
 
+/* Read one complete newline-terminated record without accepting
+ * truncated, overlong, or binary (NUL-containing) input. */
+static int read_record(FILE *f, char *line, size_t capacity)
+{
+    size_t used = 0;
+    int ch, saw_data = 0;
+
+    if (!f || !line || capacity < 2) {
+        errno = EINVAL;
+        return -1;
+    }
+    while ((ch = fgetc(f)) != EOF) {
+        saw_data = 1;
+        if (ch == '\0') {
+            errno = EINVAL;
+            return -1;
+        }
+        if (ch == '\n') {
+            line[used] = '\0';
+            return 1;
+        }
+        if (used + 1 >= capacity) {
+            errno = EINVAL;
+            return -1;
+        }
+        line[used++] = (char)ch;
+    }
+    if (ferror(f))
+        return -1;
+    if (saw_data) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
 static int parse_expiry(const char *s, time_t *value)
 {
     struct tm tmv;
@@ -174,10 +210,10 @@ static int parse_expiry(const char *s, time_t *value)
 
 int storage_load_permanent(char ips[][STORAGE_IP_LEN], size_t capacity, size_t *count)
 {
-    char path[1024], line[256];
+    char path[1024], line[STORAGE_IP_LEN];
     FILE *f;
     size_t used = 0;
-    int fd;
+    int fd, line_rc;
 
     if (!count || (!ips && capacity) || make_path(path, sizeof(path), permanent_name) != 0)
         return -1;
@@ -185,25 +221,29 @@ int storage_load_permanent(char ips[][STORAGE_IP_LEN], size_t capacity, size_t *
     if (fd < 0) return -1;
     f = fdopen(fd, "r");
     if (!f) { storage_cleanup_fd(fd); return -1; }
-    while (fgets(line, sizeof(line), f)) {
+    while ((line_rc = read_record(f, line, sizeof(line))) == 1) {
         size_t len = strlen(line);
-        if (len && line[len - 1] == '\n') line[--len] = '\0';
-        if (!len || len >= STORAGE_IP_LEN || !pf_valid_address(line) ||
-            used >= capacity) { errno = EINVAL; storage_cleanup_stream(f); return -1; }
+        if (!len || !pf_valid_address(line) || used >= capacity) {
+            errno = EINVAL;
+            storage_cleanup_stream(f);
+            return -1;
+        }
         memcpy(ips[used++], line, len + 1);
     }
-    if (ferror(f)) { storage_cleanup_stream(f); return -1; }
+    if (line_rc < 0) {
+        storage_cleanup_stream(f);
+        return -1;
+    }
     if (storage_close_stream(f, STORAGE_TEST_FAIL_READ_CLOSE) != 0) return -1;
     *count = used;
     return 0;
 }
-
 int storage_load_temporary(struct storage_temporary *entries, size_t capacity, size_t *count)
 {
-    char path[1024], line[256], ip[STORAGE_IP_LEN], expiry[32], extra;
+    char path[1024], line[STORAGE_IP_LEN + 1 + 32], ip[STORAGE_IP_LEN], expiry[32], extra;
     FILE *f;
     size_t used = 0;
-    int fd;
+    int fd, line_rc;
 
     if (!count || (!entries && capacity) || make_path(path, sizeof(path), temporary_name) != 0)
         return -1;
@@ -211,20 +251,26 @@ int storage_load_temporary(struct storage_temporary *entries, size_t capacity, s
     if (fd < 0) return -1;
     f = fdopen(fd, "r");
     if (!f) { storage_cleanup_fd(fd); return -1; }
-    while (fgets(line, sizeof(line), f)) {
+    while ((line_rc = read_record(f, line, sizeof(line))) == 1) {
         time_t when;
         if (sscanf(line, "%45s %31s %c", ip, expiry, &extra) != 2 ||
             !pf_valid_address(ip) || parse_expiry(expiry, &when) != 0 ||
-            used >= capacity) { errno = EINVAL; storage_cleanup_stream(f); return -1; }
+            used >= capacity) {
+            errno = EINVAL;
+            storage_cleanup_stream(f);
+            return -1;
+        }
         snprintf(entries[used].ip, sizeof(entries[used].ip), "%s", ip);
         entries[used++].expires_at = when;
     }
-    if (ferror(f)) { storage_cleanup_stream(f); return -1; }
+    if (line_rc < 0) {
+        storage_cleanup_stream(f);
+        return -1;
+    }
     if (storage_close_stream(f, STORAGE_TEST_FAIL_READ_CLOSE) != 0) return -1;
     *count = used;
     return 0;
 }
-
 /*
  * Returns 0 when the replacement and directory entry are durable, -1 when
  * the destination was not replaced, and -2 when rename succeeded but the
