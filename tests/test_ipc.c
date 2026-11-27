@@ -11,6 +11,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
+#include <errno.h>
 
 static int
 test_handler(const char *request, char *response, size_t size, void *context)
@@ -21,6 +22,37 @@ test_handler(const char *request, char *response, size_t size, void *context)
     if (snprintf(response, size, "OK pong\n") >= (int)size)
         return -1;
     return 0;
+}
+
+
+static int
+test_incomplete_client(const char *path, int send_partial)
+{
+    int fd;
+    struct sockaddr_un address;
+    char response[32];
+    ssize_t n;
+
+    fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) return -1;
+    memset(&address, 0, sizeof(address));
+    address.sun_family = AF_UNIX;
+    snprintf(address.sun_path, sizeof(address.sun_path), "%s", path);
+    if (connect(fd, (struct sockaddr *)&address, sizeof(address)) != 0) {
+        close(fd);
+        return -1;
+    }
+    if (send_partial) {
+        if (write(fd, "PIN", 3) != 3 || shutdown(fd, SHUT_WR) != 0) {
+            close(fd);
+            return -1;
+        }
+    }
+    do {
+        n = read(fd, response, sizeof(response));
+    } while (n < 0 && errno == EINTR);
+    close(fd);
+    return n == 0 ? 0 : -1;
 }
 
 int
@@ -62,6 +94,21 @@ main(void)
         }
         ipc_shutdown();
         _exit(0);
+    }
+
+    if (test_incomplete_client(path, 1) != 0) {
+        fprintf(stderr, "FAIL: incomplete IPC request was not closed cleanly\n");
+        (void)kill(child, SIGTERM);
+        (void)waitpid(child, NULL, 0);
+        ipc_shutdown();
+        return 1;
+    }
+    if (test_incomplete_client(path, 0) != 0) {
+        fprintf(stderr, "FAIL: idle IPC client was not timed out cleanly\n");
+        (void)kill(child, SIGTERM);
+        (void)waitpid(child, NULL, 0);
+        ipc_shutdown();
+        return 1;
     }
 
     if (ipc_client_request(path, "PING", response, sizeof(response)) != 0 ||
