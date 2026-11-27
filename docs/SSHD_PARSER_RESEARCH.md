@@ -197,3 +197,43 @@ IPC I4 is still awaiting validation. On the latest FreeBSD 15.1 run, `sudo ./tes
 - kamer-heap, SSH Log Forensics: https://github.com/kamer-heap/ssh-log-forensics/
 - Security Arsenal, TTY Log Forensics: https://securityarsenal.com/blog/tty-log-forensics-turning-honeypot-attacker-keystrokes-into-production-ssh-defense
 - Noel-BijuJohn, HTB Brutus SSH Forensics: https://github.com/Noel-BijuJohn/htb-brutus-ssh-forensics
+
+
+## 13. Additional research references and interpretation
+
+### WarnHack — SSH Backdoor Detection / Forensic Audit Guide
+URL: https://warnhack.com/blog/ssh-backdoor-detection-forensic-audit-guide
+The page could not be retrieved reliably during this review. It is recorded as a pending reference, not as a source whose detailed claims have been verified. Before adopting any specific indicator, inspect the page and cross-check it against FreeBSD-native artifacts and the user's sample corpus.
+
+### SSHwatch — SSH Forensic Analysis
+URL: https://www.sshwatch.com/ssh-forensic-analysis-6-essential-commands-to-investigate-potential-breaches/
+Useful themes: timeline reconstruction, authentication log aggregation, authorized_keys review, session recording, socket/process correlation, packet metadata and SSH binary/config integrity checks. Important portability corrections: examples using `ss`, Linux `/proc`, `md5sum`, `tlog`, `ausearch`, `aureport`, Sleuth Kit and tshark are not FreeBSD base assumptions. On FreeBSD, prefer `sockstat`, `procstat`, `netstat`, `sha256`, `mtree`, BSM tools and `tcpdump` where appropriate. File timestamps and hashes need a trusted baseline; a modified authorized_keys file is an indicator requiring investigation, not proof of compromise.
+
+### DevCloudLab — SSH Access Auditing and Session Logging
+URL: https://devcloudlab.com/blog/ssh-access-auditing-session-logging/
+Useful themes: increase sshd log detail only after verifying FreeBSD's packaged OpenSSH supports the selected LogLevel; use key fingerprints and session lifecycle where logged; consider ForceCommand/session wrappers only as an explicit opt-in. The article's journald/systemd/auditd Linux workflow is not portable. FreeBSD's native `script(1)` may support controlled terminal recording, but it changes the login path and does not cover every non-interactive, SFTP, forwarding or escape scenario. Never claim tamper-proof logging from a local root-owned file alone.
+
+### SSH-MITM documentation
+URL: https://docs.ssh-mitm.at/
+SSH-MITM is an active MITM proxy that terminates and forwards SSH connections, enabling visibility into authentication, session, file-transfer and forwarding behavior from an authorized interception position. It is useful as a research reference for what endpoint auth logs cannot reveal, but it is not a passive FreeBSD host sensor, not a default-system tool, and not suitable as a dependency for the AirBotz host agent. Deploying it would change the trust path and require explicit authorization and network architecture.
+
+### Better Stack — SSH Logging
+URL: https://betterstack.com/community/guides/logging/ssh-logging/
+Useful themes: syslog facility, authentication log review, LogLevel trade-offs and operational logging. Linux-specific journalctl/systemd examples are excluded. AirBotz must parse actual FreeBSD syslog records and avoid assuming fixed awk field positions.
+
+### SecureDebug — SSH Penetration Testing
+URL: https://securedebug.com/ssh-penetration-testing-tools-and-techniques/
+Useful threat-model themes: password/key attacks, weak server configuration, forwarding/tunneling, exposed versions and algorithm negotiation. Tools such as Nmap, Hydra, Ncrack, Metasploit and external OSINT are not dependencies for the native AirBotz sensor. Configuration assessment should use the installed `sshd -T`/configuration validation capabilities where supported, compare against version-aware policy, and never apply hardening changes automatically.
+
+### SSH-Audit — Hardening Guides
+URL: https://www.sshaudit.com/hardening_guides.html
+Useful themes: review KEX, cipher, MAC, host-key and signature algorithms; hardening must be version-aware. The site lists a community-developed FreeBSD guide and explicitly distinguishes community guides from officially tested guides. AirBotz should inspect the actual installed OpenSSH version and effective configuration; do not copy Linux paths, algorithm lists, or directives blindly. Hardening recommendations should be advisory, explain compatibility impact, and require operator approval.
+
+### FreeBSD primary documentation
+- Security Event Auditing Handbook: https://docs.freebsd.org/en/books/handbook/audit/
+- `audit(4)`: https://man.freebsd.org/cgi/man.cgi?query=audit&sektion=4
+- `auditpipe(4)`: https://man.freebsd.org/cgi/man.cgi?query=auditpipe&sektion=4
+- `praudit(1)`: https://man.freebsd.org/cgi/man.cgi?query=praudit&sektion=1
+- `auditreduce(1)`: https://man.freebsd.org/cgi/man.cgi?query=auditreduce&sektion=1
+
+These primary sources establish that FreeBSD has a BSM audit subsystem, audit trails, filtering/formatting tools, and an auditpipe live-event facility. Actual availability and event coverage must be checked on the target kernel and configuration; this is not equivalent to Linux auditd or a complete SSH session recorder.
