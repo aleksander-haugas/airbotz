@@ -156,7 +156,7 @@ test_simultaneous_clients(const char *path)
         if (setsockopt(fds[i], SOL_SOCKET, SO_RCVTIMEO, &timeout,
                        sizeof(timeout)) != 0 ||
             connect(fds[i], (struct sockaddr *)&address, sizeof(address)) != 0 ||
-            write(fds[i], "PING\\n", 5) != 5 ||
+            write(fds[i], "PING\n", 5) != 5 ||
             shutdown(fds[i], SHUT_WR) != 0)
             goto fail;
     }
@@ -172,8 +172,8 @@ test_simultaneous_clients(const char *path)
             if (n == 0) break;
             used += (size_t)n;
         }
-        response[used] = '\\0';
-        if (strcmp(response, "OK pong\\n") != 0) goto fail;
+        response[used] = '\0';
+        if (strcmp(response, "OK pong\n") != 0) goto fail;
         close(fds[i]);
         fds[i] = -1;
     }
