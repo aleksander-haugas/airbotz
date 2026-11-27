@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <poll.h>
+#include <time.h>
 
 /* FreeBSD exposes this BSD API outside strict POSIX feature profiles. */
 #if defined(__FreeBSD__)
@@ -23,11 +24,33 @@ int getpeereid(int, uid_t *, gid_t *);
 #endif
 
 #define IPC_REQUEST_SIZE 256
+#define IPC_REQUEST_TIMEOUT_MS 3000
 
 static int listen_fd = -1;
 static char socket_path[sizeof(((struct sockaddr_un *)0)->sun_path)];
 static ipc_request_handler request_handler;
 static void *handler_context;
+
+static int
+ipc_remaining_timeout_ms(const struct timespec *deadline)
+{
+    struct timespec now;
+    time_t seconds;
+    long nanoseconds;
+    long long milliseconds;
+
+    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0)
+        return -1;
+    seconds = deadline->tv_sec - now.tv_sec;
+    nanoseconds = deadline->tv_nsec - now.tv_nsec;
+    milliseconds = (long long)seconds * 1000LL +
+                   (nanoseconds + 999999L) / 1000000L;
+    if (milliseconds <= 0)
+        return 0;
+    if (milliseconds > IPC_REQUEST_TIMEOUT_MS)
+        return IPC_REQUEST_TIMEOUT_MS;
+    return (int)milliseconds;
+}
 
 static int
 write_all(int fd, const char *data, size_t length)
@@ -149,12 +172,30 @@ ipc_process(void)
     {
         struct pollfd pfd;
         size_t used = 0;
-        int ready, newline_seen = 0;
+        int ready, timeout, newline_seen = 0;
         char overflow_byte;
+        struct timespec deadline;
+        if (clock_gettime(CLOCK_MONOTONIC, &deadline) != 0) {
+            close(client_fd);
+            return 0;
+        }
+        deadline.tv_sec += IPC_REQUEST_TIMEOUT_MS / 1000;
+        deadline.tv_nsec += (IPC_REQUEST_TIMEOUT_MS % 1000) * 1000000L;
+        if (deadline.tv_nsec >= 1000000000L) {
+            deadline.tv_sec++;
+            deadline.tv_nsec -= 1000000000L;
+        }
         pfd.fd = client_fd;
         pfd.events = POLLIN;
         for (;;) {
-            ready = poll(&pfd, 1, 1000);
+            timeout = ipc_remaining_timeout_ms(&deadline);
+            if (timeout <= 0) {
+                close(client_fd);
+                return 0; /* One absolute deadline prevents slow-client stalls. */
+            }
+            ready = poll(&pfd, 1, timeout);
+            if (ready < 0 && errno == EINTR)
+                continue;
             if (ready <= 0) {
                 close(client_fd);
                 return 0; /* Idle or timed-out client cannot stall the daemon. */
