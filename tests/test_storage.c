@@ -112,6 +112,8 @@ int main(void)
         }
         assert(waitpid(child, &status, 0) == child);
         assert(WIFEXITED(status) && WEXITSTATUS(status) == 86);
+        /* Reinitialize the storage layer as a fresh daemon startup would. */
+        assert(storage_init(dir) == 0);
         assert(storage_load_permanent(loaded, 4, &count) == 0 && count == 1);
         assert(strcmp(loaded[0], "203.0.113.77") == 0);
 
@@ -136,6 +138,8 @@ int main(void)
         }
         assert(waitpid(child, &status, 0) == child);
         assert(WIFEXITED(status) && WEXITSTATUS(status) == 86);
+        /* A second fresh-start pass verifies the post-rename committed file. */
+        assert(storage_init(dir) == 0);
         assert(storage_load_permanent(loaded, 4, &count) == 0 && count == 1);
         assert(strcmp(loaded[0], candidate[0]) == 0);
 
