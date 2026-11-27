@@ -70,17 +70,17 @@ static int exercise_snapshot(const char *name,
     size_t count = 0, i;
 
     if (snapshot_fn(entries, PF_SNAPSHOT_MAX_ENTRIES, &count) != 0) {
-        fprintf(stderr, "FAIL: snapshot of %s failed\\n", name);
+        fprintf(stderr, "FAIL: snapshot of %s failed\n", name);
         return -1;
     }
     for (i = 0; i < count; i++) {
         if (!pf_valid_address(entries[i])) {
-            fprintf(stderr, "FAIL: snapshot of %s returned invalid address\\n",
+            fprintf(stderr, "FAIL: snapshot of %s returned invalid address\n",
                     name);
             return -1;
         }
     }
-    printf("PASS: snapshot of %s (%zu entr%s)\\n", name, count,
+    printf("PASS: snapshot of %s (%zu entr%s)\n", name, count,
            count == 1 ? "y" : "ies");
     return 0;
 }
