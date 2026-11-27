@@ -43,6 +43,10 @@ ipc_remaining_timeout_ms(const struct timespec *deadline)
         return -1;
     seconds = deadline->tv_sec - now.tv_sec;
     nanoseconds = deadline->tv_nsec - now.tv_nsec;
+    if (nanoseconds < 0) {
+        seconds--;
+        nanoseconds += 1000000000L;
+    }
     milliseconds = (long long)seconds * 1000LL +
                    (nanoseconds + 999999L) / 1000000L;
     if (milliseconds <= 0)
