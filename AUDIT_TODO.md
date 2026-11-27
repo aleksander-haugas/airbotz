@@ -19,7 +19,7 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` verified and closed.
   - [x] S3.a Startup restore does not destructively roll back partially applied PF entries: without a PF membership snapshot, the manager cannot distinguish entries that predate startup from entries added during restore. It preserves the partial state and supports an idempotent retry. Deterministic test covers a pre-existing PF entry and a transient restore failure.
   - [x] S3.b Reviewed add/delete and expiry rollback paths. Clean rollback returns `-1`; failed compensating PF operations return `-2`; committed storage with uncertain directory durability returns `-3` while memory follows the visible file. Tests cover permanent/temporary add and delete, plus expiry rollback and rollback failure.
   - [x] S3.c Added deterministic tests for partial startup restore, expiry failure during PF deletion, expiry persistence failure, and failed compensation. Existing tests cover storage failures and rollback divergence for all four address operations. Full suite and root-only IPC test passed on FreeBSD 15.1 after commit `352dbf4`.
-- [ ] S4. Test malformed, truncated, oversized, and corrupted persistence files.
+- [x] S4. Test malformed, truncated, oversized, and corrupted persistence files. Added strict record reading that rejects unterminated, overlong, NUL-containing, and malformed records; tests cover permanent and temporary lists, invalid IP data, invalid calendar expiry dates, and valid IPv4/IPv6 records. FreeBSD 15.1 validation passed on `b010d15`: clean production build, full `make test`, and root-only IPC integration test. Related commits: `27bc3da`, `4bfb651`, `b010d15`.
 - [ ] S5. Test recovery behavior after interrupted writes and process termination.
 
 ## Phase 2 — PF
