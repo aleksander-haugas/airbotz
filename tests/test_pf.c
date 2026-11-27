@@ -6,10 +6,10 @@ int main(void) {
     char entries[4][PF_IP_LEN];
     size_t count = 99;
     int enabled = -1;
-    const char status_enabled[] = "Status: Enabled\\nDebug: Urgent\\n";
-    const char status_disabled[] = "Status: Disabled\\n";
-    const char status_bad[] = "PF is not available\\n";
-    const char status_duplicate[] = "Status: Enabled\\nStatus: Disabled\\n";
+    const char status_enabled[] = "Status: Enabled\nDebug: Urgent\n";
+    const char status_disabled[] = "Status: Disabled\n";
+    const char status_bad[] = "PF is not available\n";
+    const char status_duplicate[] = "Status: Enabled\nStatus: Disabled\n";
     const char valid[] = "192.0.2.10\n2001:db8::10\n";
     const char crlf[] = "192.0.2.11\r\n";
     const char duplicate[] = "192.0.2.10\n192.0.2.10\n";
