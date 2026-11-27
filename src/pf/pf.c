@@ -13,6 +13,13 @@
 
 static char temp_table[64];
 static char perm_table[64];
+static const char *pfctl_path = "/sbin/pfctl";
+
+#ifdef AIRBOTZ_PF_TESTING
+void pf_test_set_command_path(const char *path) {
+    pfctl_path = path ? path : "/sbin/pfctl";
+}
+#endif
 
 int pf_valid_address(const char *ip) {
     unsigned char buf[sizeof(struct in6_addr)];
@@ -100,7 +107,7 @@ run_pfctl(char *const argv[])
         return -1;
     }
     if (pid == 0) {
-        execv("/sbin/pfctl", argv);
+        execv(pfctl_path, argv);
         _exit(127);
     }
     return wait_pfctl(pid, &status, argv);
@@ -226,7 +233,7 @@ int pf_parse_table_output(const char *output, size_t length,
 
 static int table_snapshot(const char *table, char entries[][PF_IP_LEN],
                           size_t capacity, size_t *count) {
-    char *const args[] = {"/sbin/pfctl", "-t", (char *)table,
+    char *const args[] = {(char *)pfctl_path, "-t", (char *)table,
                           "-T", "show", NULL};
     char *output = NULL;
     size_t length = 0;
@@ -254,7 +261,7 @@ int pf_init(const char *temporary, const char *permanent) {
 }
 
 int pf_status(void) {
-    char *const args[] = {"/sbin/pfctl", "-s", "info", NULL};
+    char *const args[] = {(char *)pfctl_path, "-s", "info", NULL};
     return run_pfctl(args);
 }
 
@@ -321,7 +328,7 @@ int pf_get_status(int *enabled) {
 
 static int table_operation(const char *table, const char *operation,
                            const char *ip) {
-    char *const args[] = {"/sbin/pfctl", "-t", (char *)table, "-T",
+    char *const args[] = {(char *)pfctl_path, "-t", (char *)table, "-T",
                           (char *)operation, (char *)ip, NULL};
     if (!table[0] || !pf_valid_address(ip)) return -1;
     return run_pfctl(args);
