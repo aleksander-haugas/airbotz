@@ -126,10 +126,14 @@ int main(void) {
         fprintf(stderr, "Could not initialize AirBotz PF table names.\n");
         return 1;
     }
-    if (pf_status() != 0) {
-        fprintf(stderr, "PF is unavailable or disabled.\n");
-        pf_shutdown();
-        return 1;
+    {
+        int enabled = 0;
+        if (pf_get_status(&enabled) != 0 || !enabled) {
+            fprintf(stderr, "PF is unavailable or disabled.\n");
+            pf_shutdown();
+            return 1;
+        }
+        puts("PASS: PF reports enabled");
     }
 
     if (exercise_snapshot("airbotz_temp", pf_temp_snapshot) != 0)
