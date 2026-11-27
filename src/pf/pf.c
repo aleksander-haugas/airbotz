@@ -204,13 +204,21 @@ int pf_parse_status_output(const char *output, size_t length,
             pos++;
         if (n && output[start + n - 1] == '\r')
             n--;
-        if (n == sizeof("Status: Enabled") - 1 &&
-            memcmp(output + start, "Status: Enabled", n) == 0) {
+        if (n >= sizeof("Status: Enabled") - 1 &&
+            memcmp(output + start, "Status: Enabled",
+                   sizeof("Status: Enabled") - 1) == 0 &&
+            (n == sizeof("Status: Enabled") - 1 ||
+             output[start + sizeof("Status: Enabled") - 1] == ' ' ||
+             output[start + sizeof("Status: Enabled") - 1] == '\t')) {
             if (found) return -1;
             found = 1;
             value = 1;
-        } else if (n == sizeof("Status: Disabled") - 1 &&
-                   memcmp(output + start, "Status: Disabled", n) == 0) {
+        } else if (n >= sizeof("Status: Disabled") - 1 &&
+                   memcmp(output + start, "Status: Disabled",
+                          sizeof("Status: Disabled") - 1) == 0 &&
+                   (n == sizeof("Status: Disabled") - 1 ||
+                    output[start + sizeof("Status: Disabled") - 1] == ' ' ||
+                    output[start + sizeof("Status: Disabled") - 1] == '\t')) {
             if (found) return -1;
             found = 1;
             value = 0;
