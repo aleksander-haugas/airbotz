@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <errno.h>
+#include <sys/time.h>
 
 static int
 test_handler(const char *request, char *response, size_t size, void *context)
@@ -32,9 +33,15 @@ test_incomplete_client(const char *path, int send_partial)
     struct sockaddr_un address;
     char response[32];
     ssize_t n;
+    struct timeval timeout = {3, 0};
 
     fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) return -1;
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
+                   sizeof(timeout)) != 0) {
+        close(fd);
+        return -1;
+    }
     memset(&address, 0, sizeof(address));
     address.sun_family = AF_UNIX;
     snprintf(address.sun_path, sizeof(address.sun_path), "%s", path);
