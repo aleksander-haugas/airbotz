@@ -104,15 +104,6 @@ int main(void)
         assert(storage_load_permanent(loaded, 4, &count) == -1);
     }
 
-    {
-        char path[512];
-        snprintf(path, sizeof(path), "%s/permanent.list", dir);
-        assert(unlink(path) == 0);
-        snprintf(path, sizeof(path), "%s/temporary.list", dir);
-        assert(unlink(path) == 0);
-    }
-    assert(rmdir(dir) == 0);
-
     /* Reject truncated, overlong and binary records in both persistence files.
      * Writers always emit newline-terminated text records. */
     {
@@ -155,6 +146,15 @@ int main(void)
                     sizeof("192.0.2.56 2026-02-30T00:00:00Z\n") - 1);
         assert(storage_load_temporary(got, 2, &count) == -1);
     }
+
+    {
+        char path[512];
+        snprintf(path, sizeof(path), "%s/permanent.list", dir);
+        assert(unlink(path) == 0);
+        snprintf(path, sizeof(path), "%s/temporary.list", dir);
+        assert(unlink(path) == 0);
+    }
+    assert(rmdir(dir) == 0);
 
     /* Initialization must surface close failures instead of silently
      * claiming that both persistence files were initialized successfully. */
