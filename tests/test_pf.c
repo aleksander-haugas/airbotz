@@ -6,7 +6,7 @@ int main(void) {
     char entries[4][PF_IP_LEN];
     size_t count = 99;
     int enabled = -1;
-    const char status_enabled[] = "Status: Enabled\nDebug: Urgent\n";
+    const char status_enabled[] = "Status: Enabled for 0 days 00:45:07\tDebug: Urgent\n";
     const char status_disabled[] = "Status: Disabled\n";
     const char status_bad[] = "PF is not available\n";
     const char status_duplicate[] = "Status: Enabled\nStatus: Disabled\n";
@@ -27,6 +27,9 @@ int main(void) {
                                    sizeof(status_disabled) - 1,
                                    &enabled) == 0);
     assert(enabled == 0);
+    assert(pf_parse_status_output("Status: EnabledX\n",
+                                   sizeof("Status: EnabledX\n") - 1,
+                                   &enabled) == -1);
     assert(pf_parse_status_output(status_bad, sizeof(status_bad) - 1,
                                    &enabled) == -1);
     assert(pf_parse_status_output(status_duplicate,
