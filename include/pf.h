@@ -9,6 +9,8 @@
 
 int pf_init(const char *temp_table, const char *perm_table);
 int pf_status(void);
+int pf_get_status(int *enabled);
+int pf_parse_status_output(const char *output, size_t length, int *enabled);
 int pf_temp_add(const char *ip);
 int pf_temp_delete(const char *ip);
 int pf_perm_add(const char *ip);
