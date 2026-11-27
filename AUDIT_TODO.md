@@ -80,3 +80,39 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` verified and closed.
 - Keep automatic service startup disabled until separately approved.
 - Do not alter the user's active production configuration during audit work.
 - Close checklist items only with recorded test evidence and a commit reference.
+
+
+## Phase 7 — FreeBSD native service detection platform (project architecture)
+
+- [x] F0. Define the FreeBSD-first product direction, modular architecture, dependency classes, service-parser roadmap, optional Nmap strategy and host-audit scope. Documentation baseline only; no runtime behavior changed. See `docs/AIRBOTZ_PROJECT_PLAN.md`.
+- [ ] F1. Approve supported FreeBSD release matrix and verify base capabilities at build/runtime (libpcap, tcpdump, BSM/auditpipe, mtree, freebsd-update, service inventory).
+- [ ] F2. Implement service discovery for installed/enabled/running services and actual listening sockets; distinguish base utilities from optional packages.
+- [ ] F3. Define normalized event/evidence schema shared by all collectors and parsers.
+- [ ] F4. Implement PF/libpcap network metadata collector and scan detection with bounded capture, filters, drop accounting and resource limits.
+- [ ] F5. Evaluate Nmap as an optional external active-audit adapter. Require explicit target scope, authorization, rate limits, timeouts, XML parsing and an audit trail. Never make it a core daemon dependency.
+- [ ] F6. Implement BSM/auditpipe collection after verifying kernel support, policy and event coverage.
+- [ ] F7. Implement conditional service adapters: Samba/SMB, CUPS/IPP/printers, NFS/RPC, DNS, HTTP, SMTP, FTP/inetd, DHCP and SNMP.
+- [ ] F8. Add cross-source correlation, explainable detections and capability/status reporting.
+- [ ] F9. Add fixture-driven tests, malformed-input handling, adversarial/fuzz tests and FreeBSD validation for every module.
+
+## Phase 8 — FreeBSD-native host security audit (rkhunter-inspired)
+
+- [ ] A0. Design a read-only FreeBSD host audit engine; do not assume Linux paths, kernel interfaces or rkhunter checks are portable.
+- [ ] A1. Define trusted-baseline creation, signing/storage, update lifecycle and remote/offline verification.
+- [ ] A2. Audit base-system and critical-file integrity using mtree, SHA-256 and freebsd-update IDS where applicable.
+- [ ] A3. Audit accounts, UID 0, groups, shells, authorized_keys and privilege configuration.
+- [ ] A4. Audit startup/persistence: rc.conf, rc.d, loader.conf, cron, periodic and loaded kernel modules.
+- [ ] A5. Audit processes, executable paths, listening sockets, setuid/setgid files and unusual writable executable locations.
+- [ ] A6. Audit installed service configuration and exposure for SSHD, PF, Samba, CUPS, DNS, HTTP, mail, NFS and FTP when present.
+- [ ] A7. Integrate pkg audit as an optional package-vulnerability check; do not install, upgrade or remove packages automatically.
+- [ ] A8. Produce deterministic machine-readable reports with evidence, severity, confidence, skipped checks and remediation guidance.
+- [ ] A9. Document rootkit-detection limitations: a compromised kernel or root account can tamper with local evidence; no local scanner can prove a host is clean.
+- [ ] A10. Validate audit results against clean and intentionally modified FreeBSD test hosts; verify false positives and resource use.
+
+## Phase 9 — Product quality and controlled response
+
+- [ ] X1. Define per-module resource budgets, event-loss metrics and backpressure behavior.
+- [ ] X2. Add safe report retention, redaction and optional remote evidence export.
+- [ ] X3. Validate temporary/permanent PF response only after ownership, safeguards, allowlists and operator override are proven.
+- [ ] X4. Benchmark against Fail2ban/SSHGuard and relevant audit tools using identical labeled datasets; publish precision, recall, false-positive rate, latency and resource use.
+- [ ] X5. Complete threat model, secure defaults, upgrade/migration policy and release documentation.
