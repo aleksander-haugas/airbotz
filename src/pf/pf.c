@@ -153,7 +153,7 @@ static int run_pfctl_capture(char *const argv[], char **output,
         close(pipefd[0]);
         if (dup2(pipefd[1], STDOUT_FILENO) < 0) _exit(126);
         close(pipefd[1]);
-        execv("/sbin/pfctl", argv);
+        execv(pfctl_path, argv);
         _exit(127);
     }
 
@@ -311,7 +311,7 @@ int pf_parse_status_output(const char *output, size_t length,
 }
 
 int pf_get_status(int *enabled) {
-    char *const args[] = {"/sbin/pfctl", "-s", "info", NULL};
+    char *const args[] = {(char *)pfctl_path, "-s", "info", NULL};
     char *output = NULL;
     size_t length = 0;
     int rc;
