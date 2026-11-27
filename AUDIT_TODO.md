@@ -33,7 +33,7 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` verified and closed.
 ## Phase 3 — IPC
 
 - [x] I1. Test incomplete IPC requests. Root integration tests cover a client that sends a partial request then half-closes and a client that connects but sends no data. Both are closed without invoking the request handler; client-side receive timeout bounds test duration. FreeBSD 15.1 validation passed: `make tests/test_ipc`, `sudo ./tests/test_ipc` (PASS), and full `make test` (all applicable tests passed; IPC correctly skips without root in the suite). Commits: `5134901`, `b5c049f`.
-- [~] I2. Reject trailing data and malformed request framing. Server now waits for client EOF after the single newline terminator, rejects embedded NUL, multiple frames, bytes after a terminator (including a later write), and over-limit frames. Added integration tests for multiple frames and delayed trailing bytes. Awaiting FreeBSD validation. Commits: `67b6bd4`, `6eacd0a`, `df0a7d3`.
+- [x] I2. Reject trailing data and malformed request framing. Server waits for client EOF after the single newline terminator and rejects embedded NUL, multiple frames, bytes after a terminator (including a later write), and over-limit frames. FreeBSD 15.1 validation passed: `make tests/test_ipc`, `sudo ./tests/test_ipc` (PASS), and full `make test` (all applicable tests passed; IPC correctly skips without root in the suite). Commits: `67b6bd4`, `6eacd0a`, `df0a7d3`.
 - [ ] I3. Test disconnects and simultaneous clients.
 - [ ] I4. Verify request-size limits and timeouts.
 
