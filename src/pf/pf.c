@@ -5,6 +5,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <netinet/in.h>
 #include <string.h>
 #include <errno.h>
 #include <stdio.h>
