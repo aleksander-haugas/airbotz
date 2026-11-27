@@ -62,6 +62,54 @@ test_incomplete_client(const char *path, int send_partial)
     return n == 0 ? 0 : -1;
 }
 
+
+static int
+test_malformed_client(const char *path, int split_terminator)
+{
+    int fd;
+    struct sockaddr_un address;
+    char response[32];
+    struct timeval timeout = {3, 0};
+    struct timespec delay = {0, 50000000L};
+    ssize_t n;
+
+    fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) return -1;
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
+                   sizeof(timeout)) != 0) {
+        close(fd);
+        return -1;
+    }
+    memset(&address, 0, sizeof(address));
+    address.sun_family = AF_UNIX;
+    snprintf(address.sun_path, sizeof(address.sun_path), "%s", path);
+    if (connect(fd, (struct sockaddr *)&address, sizeof(address)) != 0) {
+        close(fd);
+        return -1;
+    }
+
+    if (split_terminator) {
+        if (write(fd, "PING\n", 5) != 5) {
+            close(fd);
+            return -1;
+        }
+        (void)nanosleep(&delay, NULL);
+        if (write(fd, "EXTRA", 5) != 5) {
+            close(fd);
+            return -1;
+        }
+    } else if (write(fd, "PING\nPING\n", 10) != 10) {
+        close(fd);
+        return -1;
+    }
+    (void)shutdown(fd, SHUT_WR);
+    do {
+        n = read(fd, response, sizeof(response));
+    } while (n < 0 && errno == EINTR);
+    close(fd);
+    return n == 0 ? 0 : -1;
+}
+
 int
 main(void)
 {
@@ -112,6 +160,21 @@ main(void)
     }
     if (test_incomplete_client(path, 0) != 0) {
         fprintf(stderr, "FAIL: idle IPC client was not timed out cleanly\n");
+        (void)kill(child, SIGTERM);
+        (void)waitpid(child, NULL, 0);
+        ipc_shutdown();
+        return 1;
+    }
+
+    if (test_malformed_client(path, 0) != 0) {
+        fprintf(stderr, "FAIL: multiple IPC frames were not rejected\n");
+        (void)kill(child, SIGTERM);
+        (void)waitpid(child, NULL, 0);
+        ipc_shutdown();
+        return 1;
+    }
+    if (test_malformed_client(path, 1) != 0) {
+        fprintf(stderr, "FAIL: trailing IPC data in a later write was not rejected\n");
         (void)kill(child, SIGTERM);
         (void)waitpid(child, NULL, 0);
         ipc_shutdown();
