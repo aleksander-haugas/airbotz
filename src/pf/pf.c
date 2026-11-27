@@ -185,6 +185,59 @@ int pf_status(void) {
     return run_pfctl(args);
 }
 
+int pf_parse_status_output(const char *output, size_t length,
+                           int *enabled) {
+    size_t pos = 0;
+    int found = 0, value = 0;
+
+    if (!output || !enabled || length == 0)
+        return -1;
+    while (pos < length) {
+        size_t start = pos, n;
+        while (pos < length && output[pos] != '\n') {
+            if (output[pos] == '\0')
+                return -1;
+            pos++;
+        }
+        n = pos - start;
+        if (pos < length)
+            pos++;
+        if (n && output[start + n - 1] == '\r')
+            n--;
+        if (n == sizeof("Status: Enabled") - 1 &&
+            memcmp(output + start, "Status: Enabled", n) == 0) {
+            if (found) return -1;
+            found = 1;
+            value = 1;
+        } else if (n == sizeof("Status: Disabled") - 1 &&
+                   memcmp(output + start, "Status: Disabled", n) == 0) {
+            if (found) return -1;
+            found = 1;
+            value = 0;
+        }
+    }
+    if (!found)
+        return -1;
+    *enabled = value;
+    return 0;
+}
+
+int pf_get_status(int *enabled) {
+    char *const args[] = {"/sbin/pfctl", "-s", "info", NULL};
+    char *output = NULL;
+    size_t length = 0;
+    int rc;
+
+    if (!enabled)
+        return -1;
+    if (run_pfctl_capture(args, &output, &length) != 0)
+        return -1;
+    rc = pf_parse_status_output(output, length, enabled);
+    free(output);
+    return rc;
+}
+
+
 static int table_operation(const char *table, const char *operation,
                            const char *ip) {
     char *const args[] = {"/sbin/pfctl", "-t", (char *)table, "-T",
