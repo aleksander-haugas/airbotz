@@ -46,7 +46,11 @@ When using a non-default configuration, pass the same file to the CLI:
 The control socket defaults to `/var/run/airbotz.sock`, is created with
 root-only permissions (0600), and checks the connecting process credentials.
 The CLI sends requests to the daemon; it never modifies PF or persistence
-directly. Temporary durations are limited to 1 through 31,536,000 seconds.
+directly. The `status` command reports persisted managed-IP counts, the live PF
+enabled/disabled state, and the actual entry counts in both configured PF tables.
+Differences between persisted counts and PF table counts indicate drift that
+requires investigation; AirBotz does not automatically delete unrecognized PF
+entries. Temporary durations are limited to 1 through 31,536,000 seconds.
 
 ## Install as a FreeBSD service
 
