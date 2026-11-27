@@ -29,6 +29,7 @@ int pf_valid_address(const char *ip);
 
 #ifdef AIRBOTZ_PF_TESTING
 void pf_test_set_command_path(const char *path);
+void pf_test_set_read_error(int enabled);
 #endif
 
 #endif
