@@ -18,7 +18,7 @@ static int
 test_handler(const char *request, char *response, size_t size, void *context)
 {
     (void)context;
-    if (strcmp(request, "PING") != 0)
+    if (strncmp(request, "PING", 4) != 0)
         return -1;
     if (snprintf(response, size, "OK pong\n") >= (int)size)
         return -1;
@@ -110,6 +110,81 @@ test_malformed_client(const char *path, int split_terminator)
     return n == 0 ? 0 : -1;
 }
 
+
+static int
+test_request_limit(const char *path, int oversized)
+{
+    int fd;
+    struct sockaddr_un address;
+    struct timeval timeout = {3, 0};
+    char frame[257];
+    char response[32];
+    size_t payload = oversized ? 255 : 254;
+    ssize_t n;
+
+    memset(frame, 'X', payload);
+    memcpy(frame, "PING", 4);
+    frame[payload] = '\n';
+    fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) return -1;
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
+                   sizeof(timeout)) != 0) {
+        close(fd);
+        return -1;
+    }
+    memset(&address, 0, sizeof(address));
+    address.sun_family = AF_UNIX;
+    snprintf(address.sun_path, sizeof(address.sun_path), "%s", path);
+    if (connect(fd, (struct sockaddr *)&address, sizeof(address)) != 0 ||
+        write(fd, frame, payload + 1) != (ssize_t)(payload + 1) ||
+        shutdown(fd, SHUT_WR) != 0) {
+        close(fd);
+        return -1;
+    }
+    do {
+        n = read(fd, response, sizeof(response) - 1);
+    } while (n < 0 && errno == EINTR);
+    close(fd);
+    if (oversized)
+        return n == 0 ? 0 : -1;
+    if (n <= 0)
+        return -1;
+    response[n] = '\0';
+    return strcmp(response, "OK pong\n") == 0 ? 0 : -1;
+}
+
+static int
+test_slow_client_timeout(const char *path)
+{
+    int fd;
+    struct sockaddr_un address;
+    struct timeval timeout = {5, 0};
+    struct timespec delay = {4, 0};
+    char response[16];
+    ssize_t n;
+
+    fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) return -1;
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
+                   sizeof(timeout)) != 0) {
+        close(fd);
+        return -1;
+    }
+    memset(&address, 0, sizeof(address));
+    address.sun_family = AF_UNIX;
+    snprintf(address.sun_path, sizeof(address.sun_path), "%s", path);
+    if (connect(fd, (struct sockaddr *)&address, sizeof(address)) != 0 ||
+        write(fd, "P", 1) != 1) {
+        close(fd);
+        return -1;
+    }
+    (void)nanosleep(&delay, NULL);
+    do {
+        n = read(fd, response, sizeof(response));
+    } while (n < 0 && errno == EINTR);
+    close(fd);
+    return n == 0 ? 0 : -1;
+}
 
 static int
 test_abrupt_disconnect(const char *path)
@@ -219,7 +294,7 @@ main(void)
         return 1;
     }
     if (child == 0) {
-        for (i = 0; i < 300; i++) {
+        for (i = 0; i < 900; i++) {
             (void)ipc_process();
             (void)nanosleep(&pause, NULL);
         }
@@ -236,6 +311,28 @@ main(void)
     }
     if (test_incomplete_client(path, 0) != 0) {
         fprintf(stderr, "FAIL: idle IPC client was not timed out cleanly\n");
+        (void)kill(child, SIGTERM);
+        (void)waitpid(child, NULL, 0);
+        ipc_shutdown();
+        return 1;
+    }
+
+    if (test_request_limit(path, 0) != 0) {
+        fprintf(stderr, "FAIL: maximum-size IPC request was rejected\n");
+        (void)kill(child, SIGTERM);
+        (void)waitpid(child, NULL, 0);
+        ipc_shutdown();
+        return 1;
+    }
+    if (test_request_limit(path, 1) != 0) {
+        fprintf(stderr, "FAIL: oversized IPC request was not rejected\n");
+        (void)kill(child, SIGTERM);
+        (void)waitpid(child, NULL, 0);
+        ipc_shutdown();
+        return 1;
+    }
+    if (test_slow_client_timeout(path) != 0) {
+        fprintf(stderr, "FAIL: slow IPC client exceeded the absolute deadline\n");
         (void)kill(child, SIGTERM);
         (void)waitpid(child, NULL, 0);
         ipc_shutdown();
