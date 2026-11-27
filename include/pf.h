@@ -27,4 +27,8 @@ int pf_parse_table_output(const char *output, size_t length,
 void pf_shutdown(void);
 int pf_valid_address(const char *ip);
 
+#ifdef AIRBOTZ_PF_TESTING
+void pf_test_set_command_path(const char *path);
+#endif
+
 #endif
