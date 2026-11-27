@@ -44,8 +44,14 @@ enum storage_test_failure {
     STORAGE_TEST_FAIL_INIT_CLOSE,
     STORAGE_TEST_FAIL_READ_CLOSE
 };
+enum storage_test_crash {
+    STORAGE_TEST_CRASH_NONE = 0,
+    STORAGE_TEST_CRASH_BEFORE_RENAME,
+    STORAGE_TEST_CRASH_AFTER_RENAME
+};
 #ifdef AIRBOTZ_STORAGE_TESTING
 void storage_test_fail_stage(int stage);
+void storage_test_crash_stage(int stage);
 #endif
 
 #endif
