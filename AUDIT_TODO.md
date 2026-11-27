@@ -24,9 +24,9 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` verified and closed.
 
 ## Phase 2 — PF
 
-- [ ] P1. Review partial PF restoration failure paths.
-- [ ] P2. Implement rollback for partially completed restoration.
-- [ ] P3. Test rollback failures and resulting diagnostics.
+- [x] P1. Review partial PF restoration failure paths. `address_manager_restore()` first removes expired temporary entries (with compensation on a failed delete or pre-commit persistence failure), then reapplies permanent and live temporary entries. A failure during reapplication can leave a partial PF restore; this is intentional because the manager has no table-membership snapshot and cannot distinguish pre-existing PF entries from entries added during this attempt. Retrying is safe/idempotent because PF table adds are idempotent. Tests cover a pre-existing PF member, a transient restore failure, and successful retry. Review completed against `src/address_manager.c`, `src/pf/pf.c`, and `tests/test_address_manager.c`.
+- [ ] P2. Design safe partial-restore reconciliation. Add a reliable PF table-membership snapshot (or equivalent ownership tracking) before considering rollback; never blindly delete entries after a partial restore because some may predate AirBotz.
+- [ ] P3. Test reconciliation/rollback failures and resulting diagnostics once P2 provides a safe ownership model.
 - [ ] P4. Report actual PF state in status rather than configuration intent.
 - [ ] P5. Harden pfctl execution, including waitpid EINTR handling and diagnostics.
 
