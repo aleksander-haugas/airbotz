@@ -237,3 +237,17 @@ Useful themes: review KEX, cipher, MAC, host-key and signature algorithms; harde
 - `auditreduce(1)`: https://man.freebsd.org/cgi/man.cgi?query=auditreduce&sektion=1
 
 These primary sources establish that FreeBSD has a BSM audit subsystem, audit trails, filtering/formatting tools, and an auditpipe live-event facility. Actual availability and event coverage must be checked on the target kernel and configuration; this is not equivalent to Linux auditd or a complete SSH session recorder.
+
+
+## 14. Relationship to the wider AirBotz project
+
+The SSHD parser is one service adapter within the broader FreeBSD-first detection and host-audit architecture documented in [AIRBOTZ_PROJECT_PLAN.md](AIRBOTZ_PROJECT_PLAN.md). The shared platform will separate native collectors, service parsers, normalized evidence, correlation, risk assessment and policy/enforcement.
+
+SSHD-specific implementation must not absorb responsibilities belonging to other modules:
+- PF/libpcap and optional Nmap handle network reconnaissance evidence.
+- BSM/auditpipe and host auditors provide independent post-authentication/system evidence when configured.
+- Samba, CUPS and other service parsers are conditional adapters, not SSH parser features.
+- Host integrity/rootkit-inspired checks belong to a separate read-only audit engine.
+
+The project dependency policy distinguishes FreeBSD base facilities from optional packages. FreeBSD provides tcpdump/libpcap and BSM audit facilities on the target platform, subject to capability and configuration checks. Nmap, Samba and CUPS are optional external packages. Nmap is an explicitly scoped active-audit tool, never a mandatory runtime dependency.
+
