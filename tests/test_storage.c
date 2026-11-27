@@ -5,6 +5,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
+#include <dirent.h>
 
 
 static void write_bytes(const char *path, const void *data, size_t length)
@@ -86,6 +88,69 @@ int main(void)
         storage_test_fail_stage(STORAGE_TEST_FAIL_NONE);
         assert(storage_load_permanent(loaded, 4, &count) == 0 && count == 1);
         assert(strcmp(loaded[0], candidate[0]) == 0);
+    }
+
+
+    /* Simulate abrupt process termination at the two commit boundaries.
+     * Before rename, the previous destination must survive; after rename,
+     * the replacement must be visible. */
+    {
+        char candidate[1][STORAGE_IP_LEN];
+        pid_t child;
+        int status;
+        DIR *dp;
+        struct dirent *de;
+        size_t orphan_count = 0;
+
+        snprintf(candidate[0], sizeof(candidate[0]), "203.0.113.88");
+        child = fork();
+        assert(child >= 0);
+        if (child == 0) {
+            storage_test_crash_stage(STORAGE_TEST_CRASH_BEFORE_RENAME);
+            (void)storage_save_permanent((const char (*)[STORAGE_IP_LEN])candidate, 1);
+            _exit(1);
+        }
+        assert(waitpid(child, &status, 0) == child);
+        assert(WIFEXITED(status) && WEXITSTATUS(status) == 86);
+        assert(storage_load_permanent(loaded, 4, &count) == 0 && count == 1);
+        assert(strcmp(loaded[0], "203.0.113.77") == 0);
+
+        /* The interrupted writer leaves only its uniquely named temporary
+         * file. It must not be mistaken for the committed destination. */
+        dp = opendir(dir);
+        assert(dp != NULL);
+        while ((de = readdir(dp)) != NULL) {
+            if (strncmp(de->d_name, ".permanent.list.", 16) == 0)
+                orphan_count++;
+        }
+        assert(closedir(dp) == 0);
+        assert(orphan_count == 1);
+
+        snprintf(candidate[0], sizeof(candidate[0]), "203.0.113.99");
+        child = fork();
+        assert(child >= 0);
+        if (child == 0) {
+            storage_test_crash_stage(STORAGE_TEST_CRASH_AFTER_RENAME);
+            (void)storage_save_permanent((const char (*)[STORAGE_IP_LEN])candidate, 1);
+            _exit(1);
+        }
+        assert(waitpid(child, &status, 0) == child);
+        assert(WIFEXITED(status) && WEXITSTATUS(status) == 86);
+        assert(storage_load_permanent(loaded, 4, &count) == 0 && count == 1);
+        assert(strcmp(loaded[0], candidate[0]) == 0);
+
+        /* Remove the simulated orphan so the test fixture can be cleaned. */
+        dp = opendir(dir);
+        assert(dp != NULL);
+        while ((de = readdir(dp)) != NULL) {
+            char orphan[512];
+            if (strncmp(de->d_name, ".permanent.list.", 16) == 0) {
+                assert(snprintf(orphan, sizeof(orphan), "%s/%s", dir, de->d_name)
+                       < (int)sizeof(orphan));
+                assert(unlink(orphan) == 0);
+            }
+        }
+        assert(closedir(dp) == 0);
     }
 
     assert(storage_save_permanent(NULL, 0) == 0);
