@@ -48,7 +48,7 @@ static void test_pfctl_failures(void) {
     assert(pf_temp_add("192.0.2.77") == -1);
     assert(log_contains(log_path, "exit status 7"));
 
-    write_script(script, "kill -TERM $\n");
+    write_script(script, "kill -TERM \"$\"\n");
     assert(pf_temp_add("192.0.2.77") == -1);
     assert(log_contains(log_path, "terminated by signal"));
 
