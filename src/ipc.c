@@ -150,34 +150,72 @@ ipc_process(void)
     {
         struct pollfd pfd;
         size_t used = 0;
-        int ready, complete = 0;
+        int ready, complete = 0, newline_seen = 0;
+        char overflow_byte;
         pfd.fd = client_fd;
         pfd.events = POLLIN;
-        while (used < sizeof(request) - 1) {
+        for (;;) {
             ready = poll(&pfd, 1, 1000);
             if (ready <= 0) {
                 close(client_fd);
                 return 0; /* Idle or timed-out client cannot stall the daemon. */
             }
-            n = recv(client_fd, request + used,
-                     sizeof(request) - 1 - used, 0);
-            if (n <= 0) {
-                close(client_fd);
-                return 0;
-            }
-            used += (size_t)n;
-            request[used] = '\0';
-            newline = strchr(request, '\n');
-            if (newline) {
-                if (newline[1] != '\0') {
+
+            if (used == sizeof(request) - 1) {
+                n = recv(client_fd, &overflow_byte, 1, 0);
+                if (n > 0) {
+                    close(client_fd); /* Request exceeds the framing limit. */
+                    return 0;
+                }
+                if (n < 0 && errno == EINTR)
+                    continue;
+                if (n < 0) {
                     close(client_fd);
                     return 0;
                 }
-                *newline = '\0';
-                complete = 1;
-                break;
+                break; /* EOF after a complete, maximum-size request. */
             }
+
+            n = recv(client_fd, request + used,
+                     sizeof(request) - 1 - used, 0);
+            if (n < 0 && errno == EINTR)
+                continue;
+            if (n < 0) {
+                close(client_fd);
+                return 0;
+            }
+            if (n == 0)
+                break; /* The client must half-close after its one request. */
+
+            if (memchr(request + used, '\0', (size_t)n) != NULL) {
+                close(client_fd);
+                return 0; /* Embedded NUL is never valid framing. */
+            }
+            if (newline_seen) {
+                close(client_fd);
+                return 0; /* Reject bytes arriving after the terminator. */
+            }
+
+            {
+                char *found = memchr(request + used, '\n', (size_t)n);
+                if (found) {
+                    if (found != request + used + n - 1) {
+                        close(client_fd);
+                        return 0; /* Reject trailing bytes or a second frame. */
+                    }
+                    newline_seen = 1;
+                }
+            }
+            used += (size_t)n;
+            request[used] = '\0';
         }
+
+        if (!newline_seen || used == 0 || request[used - 1] != '\n') {
+            close(client_fd);
+            return 0;
+        }
+        request[used - 1] = '\0';
+        complete = 1;
         if (!complete) {
             close(client_fd);
             return 0;
