@@ -145,6 +145,7 @@ test_simultaneous_clients(const char *path)
     ssize_t n;
     int i;
 
+    for (i = 0; i < CLIENTS; i++) fds[i] = -1;
     memset(&address, 0, sizeof(address));
     address.sun_family = AF_UNIX;
     snprintf(address.sun_path, sizeof(address.sun_path), "%s", path);
@@ -155,7 +156,7 @@ test_simultaneous_clients(const char *path)
         if (setsockopt(fds[i], SOL_SOCKET, SO_RCVTIMEO, &timeout,
                        sizeof(timeout)) != 0 ||
             connect(fds[i], (struct sockaddr *)&address, sizeof(address)) != 0 ||
-            write(fds[i], "PING\n", 5) != 5 ||
+            write(fds[i], "PING\\n", 5) != 5 ||
             shutdown(fds[i], SHUT_WR) != 0)
             goto fail;
     }
@@ -167,12 +168,14 @@ test_simultaneous_clients(const char *path)
                 n = read(fds[i], response + used,
                          sizeof(response) - 1 - used);
             } while (n < 0 && errno == EINTR);
-            if (n <= 0) goto fail;
+            if (n < 0) goto fail;
+            if (n == 0) break;
             used += (size_t)n;
         }
-        response[used] = '\0';
-        if (strcmp(response, "OK pong\n") != 0) goto fail;
+        response[used] = '\\0';
+        if (strcmp(response, "OK pong\\n") != 0) goto fail;
         close(fds[i]);
+        fds[i] = -1;
     }
     return 0;
 
