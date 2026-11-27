@@ -131,7 +131,6 @@ ipc_process(void)
     uid_t peer_uid;
     gid_t peer_gid;
     size_t length;
-    char *newline;
 
     if (listen_fd < 0) return -1;
     client_fd = accept(listen_fd, NULL, NULL);
@@ -150,7 +149,7 @@ ipc_process(void)
     {
         struct pollfd pfd;
         size_t used = 0;
-        int ready, complete = 0, newline_seen = 0;
+        int ready, newline_seen = 0;
         char overflow_byte;
         pfd.fd = client_fd;
         pfd.events = POLLIN;
@@ -215,11 +214,6 @@ ipc_process(void)
             return 0;
         }
         request[used - 1] = '\0';
-        complete = 1;
-        if (!complete) {
-            close(client_fd);
-            return 0;
-        }
     }
 
     memset(response, 0, sizeof(response));
