@@ -72,10 +72,31 @@ handle_ipc_request(const char *request, char *response, size_t response_size,
         tokens[count++] = token;
     }
     if (count == 1 && strcmp(tokens[0], "STATUS") == 0) {
+        const char *pf_state = "not-configured";
+        char temp_state[24] = "unavailable";
+        char perm_state[24] = "unavailable";
+
+        if (manager->pf_enabled) {
+            char entries[PF_SNAPSHOT_MAX_ENTRIES][PF_IP_LEN];
+            size_t temp_count = 0, perm_count = 0;
+            int enabled = 0;
+
+            if (pf_get_status(&enabled) == 0)
+                pf_state = enabled ? "enabled" : "disabled";
+            else
+                pf_state = "unavailable";
+
+            if (pf_temp_snapshot(entries, PF_SNAPSHOT_MAX_ENTRIES,
+                                 &temp_count) == 0)
+                snprintf(temp_state, sizeof(temp_state), "%zu", temp_count);
+            if (pf_perm_snapshot(entries, PF_SNAPSHOT_MAX_ENTRIES,
+                                 &perm_count) == 0)
+                snprintf(perm_state, sizeof(perm_state), "%zu", perm_count);
+        }
         snprintf(response, response_size,
-            "OK running permanent=%zu temporary=%zu pf=%s\n",
+            "OK running permanent=%zu temporary=%zu pf=%s pf_temp_entries=%s pf_perm_entries=%s\n",
             manager->permanent_count, manager->temporary_count,
-            manager->pf_enabled ? "enabled" : "disabled");
+            pf_state, temp_state, perm_state);
         return 0;
     }
     if (count == 1 && strcmp(tokens[0], "LIST") == 0) {
