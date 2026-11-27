@@ -2,7 +2,6 @@
 #include "logger.h"
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <arpa/inet.h>
@@ -39,8 +38,135 @@ static int run_pfctl(char *const argv[]) {
         execv("/sbin/pfctl", argv);
         _exit(127);
     }
-    if (waitpid(pid, &status, 0) < 0) return -1;
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno == EINTR) continue;
+        return -1;
+    }
     return WIFEXITED(status) && WEXITSTATUS(status) == 0 ? 0 : -1;
+}
+
+static int run_pfctl_capture(char *const argv[], char **output,
+                             size_t *output_length) {
+    int pipefd[2], read_error = 0, oversized = 0;
+    size_t used = 0;
+    char *buffer;
+    pid_t pid;
+    int status;
+    char chunk[4096];
+
+    if (!output || !output_length) return -1;
+    *output = NULL;
+    *output_length = 0;
+    buffer = malloc(PF_SNAPSHOT_MAX_BYTES + 1);
+    if (!buffer) return -1;
+    if (pipe(pipefd) != 0) {
+        free(buffer);
+        return -1;
+    }
+    pid = fork();
+    if (pid < 0) {
+        close(pipefd[0]);
+        close(pipefd[1]);
+        free(buffer);
+        return -1;
+    }
+    if (pid == 0) {
+        close(pipefd[0]);
+        if (dup2(pipefd[1], STDOUT_FILENO) < 0) _exit(126);
+        close(pipefd[1]);
+        execv("/sbin/pfctl", argv);
+        _exit(127);
+    }
+
+    close(pipefd[1]);
+    for (;;) {
+        ssize_t n = read(pipefd[0], chunk, sizeof(chunk));
+        if (n > 0) {
+            if ((size_t)n > PF_SNAPSHOT_MAX_BYTES - used) {
+                oversized = 1;
+            } else if (!oversized) {
+                memcpy(buffer + used, chunk, (size_t)n);
+                used += (size_t)n;
+            }
+            continue;
+        }
+        if (n == 0) break;
+        if (errno == EINTR) continue;
+        read_error = 1;
+        break;
+    }
+    close(pipefd[0]);
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno == EINTR) continue;
+        free(buffer);
+        return -1;
+    }
+    if (read_error || oversized ||
+        !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        free(buffer);
+        return -1;
+    }
+    buffer[used] = '\0';
+    *output = buffer;
+    *output_length = used;
+    return 0;
+}
+
+int pf_parse_table_output(const char *output, size_t length,
+                          char entries[][PF_IP_LEN], size_t capacity,
+                          size_t *count) {
+    size_t pos = 0, used = 0;
+
+    if (!count || (length && !output) || (capacity && !entries) ||
+        capacity > PF_SNAPSHOT_MAX_ENTRIES)
+        return -1;
+    *count = 0;
+    if (length == 0) return 0;
+    if (output[length - 1] != '\n') return -1;
+
+    while (pos < length) {
+        size_t start = pos, n, i;
+        char address[PF_IP_LEN];
+
+        while (pos < length && output[pos] != '\n') {
+            if (output[pos] == '\0') return -1;
+            pos++;
+        }
+        if (pos == length) return -1;
+        n = pos - start;
+        pos++;
+        if (n && output[start + n - 1] == '\r') n--;
+        if (n == 0 || n >= sizeof(address) || used >= capacity)
+            return -1;
+        memcpy(address, output + start, n);
+        address[n] = '\0';
+        if (!pf_valid_address(address)) return -1;
+        for (i = 0; i < used; i++)
+            if (strcmp(entries[i], address) == 0) return -1;
+        memcpy(entries[used], address, n + 1);
+        used++;
+    }
+    *count = used;
+    return 0;
+}
+
+static int table_snapshot(const char *table, char entries[][PF_IP_LEN],
+                          size_t capacity, size_t *count) {
+    char *const args[] = {"/sbin/pfctl", "-t", (char *)table,
+                          "-T", "show", NULL};
+    char *output = NULL;
+    size_t length = 0;
+    int rc;
+
+    if (!valid_table(table) || !count ||
+        (capacity && !entries) || capacity > PF_SNAPSHOT_MAX_ENTRIES)
+        return -1;
+    *count = 0;
+    if (run_pfctl_capture(args, &output, &length) != 0)
+        return -1;
+    rc = pf_parse_table_output(output, length, entries, capacity, count);
+    free(output);
+    return rc;
 }
 
 int pf_init(const char *temporary, const char *permanent) {
@@ -80,6 +206,16 @@ int pf_perm_add(const char *ip) {
 
 int pf_perm_delete(const char *ip) {
     return table_operation(perm_table, "delete", ip);
+}
+
+int pf_temp_snapshot(char entries[][PF_IP_LEN], size_t capacity,
+                     size_t *count) {
+    return table_snapshot(temp_table, entries, capacity, count);
+}
+
+int pf_perm_snapshot(char entries[][PF_IP_LEN], size_t capacity,
+                     size_t *count) {
+    return table_snapshot(perm_table, entries, capacity, count);
 }
 
 void pf_shutdown(void) {
