@@ -18,15 +18,29 @@ static char db_dir[512];
 
 #ifdef AIRBOTZ_STORAGE_TESTING
 static int test_fail_stage;
+static int test_crash_stage;
 void storage_test_fail_stage(int stage)
 {
     test_fail_stage = stage;
+}
+void storage_test_crash_stage(int stage)
+{
+    test_crash_stage = stage;
+}
+static void storage_test_maybe_crash(int stage)
+{
+    if (test_crash_stage == stage)
+        _exit(86);
 }
 static int storage_test_should_fail(int stage)
 {
     return test_fail_stage == stage;
 }
 #else
+static void storage_test_maybe_crash(int stage)
+{
+    (void)stage;
+}
 static int storage_test_should_fail(int stage)
 {
     (void)stage;
@@ -375,6 +389,10 @@ static int atomic_writer(const char *name,
     }
     f = NULL;
 
+    /* Test-only hard stop simulates process death after the temporary file
+     * is complete and closed, but before the destination is replaced. */
+    storage_test_maybe_crash(STORAGE_TEST_CRASH_BEFORE_RENAME);
+
     if (storage_test_should_fail(STORAGE_TEST_FAIL_RENAME) || rename(temp, path) != 0) {
         if (storage_test_should_fail(STORAGE_TEST_FAIL_RENAME)) errno = EIO;
         saved = errno ? errno : EIO;
@@ -386,6 +404,7 @@ static int atomic_writer(const char *name,
 
     /* From this point onward the new file is visible: never report a
      * pre-commit failure, and callers must not roll back PF as if it were not. */
+    storage_test_maybe_crash(STORAGE_TEST_CRASH_AFTER_RENAME);
 #ifdef AIRBOTZ_STORAGE_TESTING
     if (storage_test_should_fail(STORAGE_TEST_FAIL_DIRECTORY_FSYNC) ||
         fsync(dirfd) != 0) {
