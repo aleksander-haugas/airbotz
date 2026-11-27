@@ -57,6 +57,11 @@ static void test_pfctl_failures(void) {
     assert(pf_temp_snapshot(entries, 2, &count) == -1);
     assert(log_contains(log_path, "exceeded 256 KiB limit"));
 
+    pf_test_set_read_error(1);
+    assert(pf_temp_snapshot(entries, 2, &count) == -1);
+    assert(log_contains(log_path, "failed while reading command output"));
+    pf_test_set_read_error(0);
+
     write_script(script, "printf '192.0.2.77\\n'\n");
     assert(pf_temp_snapshot(entries, 2, &count) == 0);
     assert(count == 1 && strcmp(entries[0], "192.0.2.77") == 0);
