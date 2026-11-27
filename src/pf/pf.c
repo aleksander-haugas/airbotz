@@ -31,19 +31,79 @@ static int valid_table(const char *s) {
     return 1;
 }
 
-static int run_pfctl(char *const argv[]) {
+static void
+log_pfctl_failure(char *const argv[], const char *detail)
+{
+    char command[256];
+    size_t used = 0, i;
+
+    command[0] = '\\0';
+    for (i = 1; argv[i] && used < sizeof(command); i++) {
+        int n = snprintf(command + used, sizeof(command) - used,
+                         "%s%s", used ? " " : "", argv[i]);
+        if (n < 0 || (size_t)n >= sizeof(command) - used)
+            break;
+        used += (size_t)n;
+    }
+    logger_log("ERROR", "pfctl %s failed (%s)",
+               command[0] ? command : "command", detail);
+}
+
+static int
+wait_pfctl(pid_t pid, int *status, char *const argv[])
+{
+    pid_t result;
+
+    do {
+        result = waitpid(pid, status, 0);
+    } while (result < 0 && errno == EINTR);
+
+    if (result < 0) {
+        int saved_errno = errno;
+        char detail[128];
+        snprintf(detail, sizeof(detail), "waitpid: %s",
+                 strerror(saved_errno));
+        log_pfctl_failure(argv, detail);
+        return -1;
+    }
+    if (WIFEXITED(*status)) {
+        if (WEXITSTATUS(*status) == 0)
+            return 0;
+        {
+            char detail[64];
+            snprintf(detail, sizeof(detail), "exit status %d",
+                     WEXITSTATUS(*status));
+            log_pfctl_failure(argv, detail);
+        }
+    } else if (WIFSIGNALED(*status)) {
+        char detail[64];
+        snprintf(detail, sizeof(detail), "terminated by signal %d",
+                 WTERMSIG(*status));
+        log_pfctl_failure(argv, detail);
+    } else {
+        log_pfctl_failure(argv, "unexpected child state");
+    }
+    return -1;
+}
+
+static int
+run_pfctl(char *const argv[])
+{
     pid_t pid = fork();
     int status;
-    if (pid < 0) return -1;
+
+    if (pid < 0) {
+        int saved_errno = errno;
+        char detail[128];
+        snprintf(detail, sizeof(detail), "fork: %s", strerror(saved_errno));
+        log_pfctl_failure(argv, detail);
+        return -1;
+    }
     if (pid == 0) {
         execv("/sbin/pfctl", argv);
         _exit(127);
     }
-    while (waitpid(pid, &status, 0) < 0) {
-        if (errno == EINTR) continue;
-        return -1;
-    }
-    return WIFEXITED(status) && WEXITSTATUS(status) == 0 ? 0 : -1;
+    return wait_pfctl(pid, &status, argv);
 }
 
 static int run_pfctl_capture(char *const argv[], char **output,
@@ -59,13 +119,24 @@ static int run_pfctl_capture(char *const argv[], char **output,
     *output = NULL;
     *output_length = 0;
     buffer = malloc(PF_SNAPSHOT_MAX_BYTES + 1);
-    if (!buffer) return -1;
+    if (!buffer) {
+        log_pfctl_failure(argv, "cannot allocate output buffer");
+        return -1;
+    }
     if (pipe(pipefd) != 0) {
+        int saved_errno = errno;
+        char detail[128];
+        snprintf(detail, sizeof(detail), "pipe: %s", strerror(saved_errno));
+        log_pfctl_failure(argv, detail);
         free(buffer);
         return -1;
     }
     pid = fork();
     if (pid < 0) {
+        int saved_errno = errno;
+        char detail[128];
+        snprintf(detail, sizeof(detail), "fork: %s", strerror(saved_errno));
+        log_pfctl_failure(argv, detail);
         close(pipefd[0]);
         close(pipefd[1]);
         free(buffer);
@@ -97,13 +168,15 @@ static int run_pfctl_capture(char *const argv[], char **output,
         break;
     }
     close(pipefd[0]);
-    while (waitpid(pid, &status, 0) < 0) {
-        if (errno == EINTR) continue;
+    if (wait_pfctl(pid, &status, argv) != 0) {
         free(buffer);
         return -1;
     }
-    if (read_error || oversized ||
-        !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+    if (read_error || oversized) {
+        if (read_error)
+            log_pfctl_failure(argv, "failed while reading command output");
+        else
+            log_pfctl_failure(argv, "command output exceeded 256 KiB limit");
         free(buffer);
         return -1;
     }
