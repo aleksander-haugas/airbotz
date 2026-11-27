@@ -14,10 +14,17 @@
 static char temp_table[64];
 static char perm_table[64];
 static const char *pfctl_path = "/sbin/pfctl";
+#ifdef AIRBOTZ_PF_TESTING
+static int pf_test_read_error;
+#endif
 
 #ifdef AIRBOTZ_PF_TESTING
 void pf_test_set_command_path(const char *path) {
     pfctl_path = path ? path : "/sbin/pfctl";
+}
+
+void pf_test_set_read_error(int enabled) {
+    pf_test_read_error = enabled != 0;
 }
 #endif
 
@@ -158,6 +165,11 @@ static int run_pfctl_capture(char *const argv[], char **output,
     }
 
     close(pipefd[1]);
+#ifdef AIRBOTZ_PF_TESTING
+    if (pf_test_read_error) {
+        read_error = 1;
+    } else
+#endif
     for (;;) {
         ssize_t n = read(pipefd[0], chunk, sizeof(chunk));
         if (n > 0) {
