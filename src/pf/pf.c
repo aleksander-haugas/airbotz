@@ -37,7 +37,7 @@ log_pfctl_failure(char *const argv[], const char *detail)
     char command[256];
     size_t used = 0, i;
 
-    command[0] = '\\0';
+    command[0] = '\0';
     for (i = 1; argv[i] && used < sizeof(command); i++) {
         int n = snprintf(command + used, sizeof(command) - used,
                          "%s%s", used ? " " : "", argv[i]);
