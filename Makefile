@@ -17,7 +17,7 @@ tests/test_ssh: tests/test_ssh.c src/ssh/ssh_parser.c
 	$(CC) $(CFLAGS) -o $@ tests/test_ssh.c src/ssh/ssh_parser.c
 
 tests/test_pf: tests/test_pf.c src/pf/pf.c src/logger.c
-	$(CC) $(CFLAGS) -o $@ tests/test_pf.c src/pf/pf.c src/logger.c
+	$(CC) $(CFLAGS) -DAIRBOTZ_PF_TESTING -o $@ tests/test_pf.c src/pf/pf.c src/logger.c
 
 tests/test_pf_live: tests/test_pf_live.c src/pf/pf.c src/logger.c
 	$(CC) $(CFLAGS) -o $@ tests/test_pf_live.c src/pf/pf.c src/logger.c
