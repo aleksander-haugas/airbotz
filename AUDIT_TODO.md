@@ -35,11 +35,24 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` verified and closed.
 - [x] I1. Test incomplete IPC requests. Root integration tests cover a client that sends a partial request then half-closes and a client that connects but sends no data. Both are closed without invoking the request handler; client-side receive timeout bounds test duration. FreeBSD 15.1 validation passed: `make tests/test_ipc`, `sudo ./tests/test_ipc` (PASS), and full `make test` (all applicable tests passed; IPC correctly skips without root in the suite). Commits: `5134901`, `b5c049f`.
 - [x] I2. Reject trailing data and malformed request framing. Server waits for client EOF after the single newline terminator and rejects embedded NUL, multiple frames, bytes after a terminator (including a later write), and over-limit frames. FreeBSD 15.1 validation passed: `make tests/test_ipc`, `sudo ./tests/test_ipc` (PASS), and full `make test` (all applicable tests passed; IPC correctly skips without root in the suite). Commits: `67b6bd4`, `6eacd0a`, `df0a7d3`.
 - [x] I3. Test disconnects and simultaneous clients. Added integration coverage for abrupt disconnect after a partial request and four clients connected/queued concurrently; each must receive its own complete response without cross-talk. The server remains deliberately single-threaded and services queued clients sequentially. FreeBSD 15.1 validation passed: `make tests/test_ipc`, `sudo ./tests/test_ipc` (PASS), and full `make test` (all applicable tests passed; IPC correctly skips without root in the suite). Validation recorded after implementation commits `ccd13f6`, `d10b45a`, `d514909`.
-- [~] I4. Verify request-size limits and timeouts. Added tests for the maximum accepted frame (254 payload bytes plus newline), oversized frames, and a slow client; IPC now enforces a 3-second absolute monotonic deadline for the complete request, preventing byte-at-a-time clients from extending the timeout indefinitely. Awaiting FreeBSD validation. Commits: `acaf980`, `2fa4867`, `04e075f`.
+- [~] I4. Verify request-size limits and timeouts. Added tests for the maximum accepted frame (254 payload bytes plus newline), oversized frames, and a slow client; IPC now enforces a 3-second absolute monotonic deadline for the complete request. FreeBSD 15.1 validation is currently failing: `sudo ./tests/test_ipc` reports `FAIL: idle IPC client was not timed out cleanly`; the unprivileged `make test` skips the root-only integration test and does not clear this failure. Diagnose and rerun the root integration test before closing. Commits: `acaf980`, `2fa4867`, `04e075f`.
 
-## Phase 4 — SSH reader
+## Phase 4 — SSHD parser research and detection
 
-- [ ] H1. Test excessively long and malformed SSH log lines.
+- [x] R0. Documented the four supplied forensic references, initial event taxonomy, detection hypotheses, predictive-scoring guardrails, telemetry boundaries, parser engineering requirements, current implementation gaps, and staged work plan in `docs/SSHD_PARSER_RESEARCH.md`. Documentation only; no parser behavior changed. Commit: `68138d7`.
+- [ ] R1. Inventory and fingerprint the additional sample corpus; record provenance, platform/OpenSSH version, format, time coverage, and sanitization status.
+- [ ] R2. Build a catalogue of exact sshd message shapes from the samples.
+- [ ] R3. Define the normalized event schema and parser grammar before implementation.
+- [ ] R4. Implement bounded syslog-envelope and sshd-message parsing.
+- [ ] R5. Add fixture-driven parser tests for observed variants and malformed input.
+- [ ] R6. Add time-window correlation for brute force, spraying-like behavior, enumeration, distributed attempts, and success-after-failure.
+- [ ] R7. Add explainable scoring and baseline-aware severity; measure false positives.
+- [ ] R8. Assess optional FreeBSD session/process telemetry separately from auth.log parsing.
+- [ ] R9. Validate on FreeBSD and complete performance/security review.
+
+## Phase 5 — SSH reader
+
+- [ ] H1. Test excessively long and malformed SSH log lines, including partial records and bounded handling.
 - [ ] H2. Review read errors and log-rotation recovery.
 
 ## Phase 5 — Configuration and daemon
