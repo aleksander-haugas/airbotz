@@ -125,3 +125,4 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` verified and closed.
 - [ ] X3. Validate temporary/permanent PF response only after ownership, safeguards, allowlists and operator override are proven.
 - [ ] X4. Benchmark against Fail2ban/SSHGuard and relevant audit tools using identical labeled datasets; publish precision, recall, false-positive rate, latency and resource use.
 - [ ] X5. Complete threat model, secure defaults, upgrade/migration policy and release documentation.
+  - [~] Session lifecycle sample: 182 opens and 182 closes overall across nine selected users, but per-user imbalance (curi +4 closes; jmzhu +4 opens) proves aggregate equality is insufficient for pairing. Same-PID accepted/open/close sequences are observed; retain PID + username + timestamp as correlation evidence, account for PID reuse, and represent unmatched lifecycle events. See research section 14.9.
