@@ -450,6 +450,10 @@ get_distributed_spray_metrics(void)
     struct distributed_spray_metrics metrics = {0, 0, 0, 0, 0};
     unsigned int i;
 
+    /*
+     * Aggregate both dimensions in one ring traversal. The account and
+     * source hash tables remain independent, bounded scratch structures.
+     */
     for (i = 0; i < count; ++i) {
         const struct auth_observation *item =
             &observations[(head + i) % SSH_DETECTION_CAPACITY];
@@ -496,15 +500,7 @@ get_distributed_spray_metrics(void)
             }
             slot = (slot + 1U) & (SPRAY_HASH_CAPACITY - 1U);
         }
-    }
 
-    for (i = 0; i < count; ++i) {
-        const struct auth_observation *item =
-            &observations[(head + i) % SSH_DETECTION_CAPACITY];
-        unsigned int slot, probes;
-
-        if (item->username[0] == '\0')
-            continue;
         slot = address_hash(item->address) & (SPRAY_HASH_CAPACITY - 1U);
         for (probes = 0; probes < SPRAY_HASH_CAPACITY; ++probes) {
             struct distributed_spray_bucket *bucket =
