@@ -2,7 +2,7 @@ PREFIX?=/usr/local
 CC?=cc
 CFLAGS+=-Iinclude -D_POSIX_C_SOURCE=200809L -std=c11 -Wall -Wextra -Wpedantic
 LDFLAGS?=
-SRC=src/main.c src/core.c src/ipc.c src/config.c src/logger.c src/storage.c src/address_manager.c src/pf/pf.c src/ssh/ssh.c src/ssh/ssh_parser.c
+SRC=src/main.c src/core.c src/ipc.c src/config.c src/logger.c src/storage.c src/address_manager.c src/pf/pf.c src/ssh/ssh.c src/ssh/ssh_parser.c src/ssh/ssh_detection.c
 OBJ=$(SRC:.c=.o)
 
 all: airbotz
@@ -24,6 +24,9 @@ tests/test_pf_live: tests/test_pf_live.c src/pf/pf.c src/logger.c
 
 tests/test_ssh_rotation: tests/test_ssh_rotation.c src/ssh/ssh.c src/ssh/ssh_parser.c src/logger.c
 	$(CC) $(CFLAGS) -DAIRBOTZ_SSH_TESTING -o $@ tests/test_ssh_rotation.c src/ssh/ssh.c src/ssh/ssh_parser.c src/logger.c
+
+tests/test_ssh_detection: tests/test_ssh_detection.c src/ssh/ssh_detection.c src/logger.c
+	$(CC) $(CFLAGS) -o $@ tests/test_ssh_detection.c src/ssh/ssh_detection.c src/logger.c
 
 tests/test_storage: tests/test_storage.c src/storage.c src/pf/pf.c src/logger.c
 	$(CC) $(CFLAGS) -DAIRBOTZ_STORAGE_TESTING -o $@ tests/test_storage.c src/storage.c src/pf/pf.c src/logger.c
@@ -50,12 +53,13 @@ fuzz-ssh: tests/fuzz_ssh_parser
 	./tests/fuzz_ssh_parser -max_len=4096 -max_total_time=60 "$$corpus"
 
 clean:
-	rm -f $(OBJ) airbotz tests/test_ssh tests/test_pf tests/test_pf_live tests/test_ssh_rotation tests/test_storage tests/test_address_manager tests/fuzz_ssh_parser
+	rm -f $(OBJ) airbotz tests/test_ssh tests/test_pf tests/test_pf_live tests/test_ssh_rotation tests/test_ssh_detection tests/test_storage tests/test_address_manager tests/fuzz_ssh_parser
 
 test: airbotz tests/test_ssh tests/test_pf tests/test_ssh_rotation tests/test_storage tests/test_address_manager tests/test_ipc
 	./tests/test_ssh
 	./tests/test_pf
 	./tests/test_ssh_rotation
+	./tests/test_ssh_detection
 	./tests/test_storage
 	./tests/test_address_manager
 	./tests/test_ipc
