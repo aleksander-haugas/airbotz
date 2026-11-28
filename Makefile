@@ -73,7 +73,7 @@ test: airbotz tests/test_ssh tests/test_pf tests/test_ssh_rotation tests/test_ss
 test-pf-live: tests/test_pf_live
 	@echo "Run with root privileges: ./tests/test_pf_live"
 
-.PHONY: all clean test test-pf-live fuzz-ssh test_address_manager install
+.PHONY: all clean test test-pf-live fuzz-ssh bench-ssh-detection test_address_manager install
 
 install: airbotz
 	install -d $(DESTDIR)$(PREFIX)/sbin $(DESTDIR)$(PREFIX)/etc/airbotz $(DESTDIR)$(PREFIX)/etc/rc.d
