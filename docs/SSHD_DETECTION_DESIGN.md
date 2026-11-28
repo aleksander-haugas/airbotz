@@ -163,7 +163,7 @@ Both rules are deliberately bounded and observe-only. They use only normalized `
 - The rule is a heuristic, not proof of coordination: shared NAT, proxy infrastructure, botnets and legitimate distributed clients can produce overlapping patterns. Findings remain observe-only and provisional.
 - Distributed password spraying (multiple accounts attacked across multiple IPs) is a different pattern and is not implemented by this rule.
 
-### 11.3 Shared evidence and limits
+### 11.4 Shared evidence and limits
 
 - A syslog repetition summary contributes its explicit number of additional copies, not one plus that number. The summary remains one bounded observation and does not synthesize timestamps. The represented copies have reduced temporal precision.
 - The correlation store is a fixed 4096-entry ring. It expires entries by monotonic time and reports capacity evictions and partial visibility. The pre-event detection state is evaluated after any required eviction, so an evicted observation cannot incorrectly suppress a threshold crossing.
