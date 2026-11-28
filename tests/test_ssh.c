@@ -73,6 +73,12 @@ int main(void) {
         assert(strcmp(event.address, "203.0.113.8") == 0);
 
         assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: Received disconnect from 2001:db8::8: 11: Bye Bye [preauth]",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_RECEIVED_DISCONNECT);
+        assert(strcmp(event.address, "2001:db8::8") == 0);
+
+        assert(ssh_parse_record(
             "Dec 10 06:55:46 LabSZ sshd[24200]: Disconnecting: Too many authentication failures for root [preauth]",
             &event) == 0);
         assert(event.type == SSH_EVENT_SERVER_DISCONNECT);
