@@ -249,6 +249,58 @@ classify_transport(struct ssh_event *event, const char *body)
     return 0;
 }
 
+/*
+ * Decode syslogd's compressed duplicate form:
+ * "message repeated N times: [ <original message>]".
+ * N is the number of additional copies, not a new independent attempt.
+ */
+static int
+unwrap_repetition_summary(const char *message, char *original,
+                          size_t original_cap, unsigned int *count)
+{
+    static const char prefix[] = "message repeated ";
+    static const char middle[] = " times: [";
+    const char *p, *body, *end;
+    unsigned int value = 0;
+    size_t body_len;
+
+    if (!message || !original || !count ||
+        strncmp(message, prefix, sizeof(prefix) - 1) != 0)
+        return 0;
+
+    p = message + sizeof(prefix) - 1;
+    if (!isdigit((unsigned char)*p))
+        return 0;
+
+    while (isdigit((unsigned char)*p)) {
+        unsigned int digit = (unsigned int)(*p - '0');
+        if (value > (~0U - digit) / 10U)
+            return 0;
+        value = value * 10U + digit;
+        p++;
+    }
+    if (value == 0 || strncmp(p, middle, sizeof(middle) - 1) != 0)
+        return 0;
+
+    body = p + sizeof(middle) - 1;
+    end = message + strlen(message);
+    if (end <= body || end[-1] != ']')
+        return 0;
+    end--;
+
+    while (body < end && isspace((unsigned char)*body))
+        body++;
+    while (end > body && isspace((unsigned char)end[-1]))
+        end--;
+    body_len = (size_t)(end - body);
+    if (body_len == 0 || body_len >= original_cap)
+        return 0;
+
+    copy_span(original, original_cap, body, body_len);
+    *count = value;
+    return 1;
+}
+
 static void
 classify_message(struct ssh_event *event, const char *message)
 {
@@ -545,6 +597,8 @@ ssh_parse_record_cstr(const char *line, struct ssh_event *event)
     unsigned int day, hour, minute, second;
     char timestamp[SSH_EVENT_TIME_MAX];
     char message[SSH_EVENT_MESSAGE_MAX];
+    char normalized_message[SSH_EVENT_MESSAGE_MAX];
+    unsigned int repetition_count = 0;
 
     if (!line || !event)
         return -1;
@@ -628,8 +682,18 @@ ssh_parse_record_cstr(const char *line, struct ssh_event *event)
     }
 
     copy_span(message, sizeof(message), message_start, message_len);
-    copy_span(event->message, sizeof(event->message), message, message_len);
-    classify_message(event, message);
+    if (unwrap_repetition_summary(message, normalized_message,
+                                  sizeof(normalized_message),
+                                  &repetition_count)) {
+        event->is_repetition_summary = 1;
+        event->repetition_count = repetition_count;
+        copy_span(event->message, sizeof(event->message),
+                  normalized_message, strlen(normalized_message));
+        classify_message(event, normalized_message);
+    } else {
+        copy_span(event->message, sizeof(event->message), message, message_len);
+        classify_message(event, message);
+    }
     return 0;
 }
 
