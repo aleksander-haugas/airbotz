@@ -255,7 +255,7 @@ classify_message(struct ssh_event *event, const char *message)
                           event->address, sizeof(event->address)))
             event->has_address = 1;
     } else if (strncmp(body, "Did not receive identification string from ", 43) == 0) {
-        const char *address_start = body + 42;
+        const char *address_start = body + 43;
         const char *address_end = address_start;
         event->type = SSH_EVENT_IDENTIFICATION_MISSING;
         while (*address_end && !isspace((unsigned char)*address_end))
