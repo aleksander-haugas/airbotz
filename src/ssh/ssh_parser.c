@@ -190,7 +190,7 @@ classify_transport(struct ssh_event *event, const char *body)
         event->transport_operation = SSH_TRANSPORT_OP_READ;
     } else if (strncmp(body, "Write failed:", 13) == 0) {
         event->transport_operation = SSH_TRANSPORT_OP_WRITE;
-    } else if (strncmp(body, "Did not receive identification string", 38) == 0) {
+    } else if (strstr(body, "banner exchange:") != NULL) {
         event->transport_operation = SSH_TRANSPORT_OP_IDENTIFICATION;
     } else if (strstr(body, "kex_exchange_identification") != NULL) {
         event->transport_operation = SSH_TRANSPORT_OP_KEY_EXCHANGE;
@@ -203,8 +203,7 @@ classify_transport(struct ssh_event *event, const char *body)
         strstr(body, "Connection reset") != NULL) {
         event->transport_cause = SSH_TRANSPORT_CAUSE_CONNECTION_RESET;
     } else if (strstr(body, "Connection timed out") != NULL ||
-               strstr(body, "Operation timed out") != NULL ||
-               strstr(body, "timeout") != NULL) {
+               strstr(body, "Operation timed out") != NULL) {
         event->transport_cause = SSH_TRANSPORT_CAUSE_TIMEOUT;
     } else if (strstr(body, "Broken pipe") != NULL) {
         event->transport_cause = SSH_TRANSPORT_CAUSE_BROKEN_PIPE;
