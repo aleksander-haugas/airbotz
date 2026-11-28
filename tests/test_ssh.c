@@ -53,6 +53,17 @@ int main(void) {
         assert(event.port == 49811 && event.has_port);
         assert(event.invalid_user);
 
+        /*
+         * Malformed input must not underflow the username length when the
+         * text is exactly "invalid user" without a following username.
+         */
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: Failed password for invalid user from 192.0.2.11 port 22 ssh2",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_FAILED_PASSWORD);
+        assert(!event.invalid_user);
+        assert(strcmp(event.username, "invalid user") == 0);
+
         assert(ssh_parse_record(
             "Jan 07 17:22:01 LabSZ sshd-session[314]: Accepted publickey for jmzhu from 2001:db8::1 port 22 ssh2",
             &event) == 0);
