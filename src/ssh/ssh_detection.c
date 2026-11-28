@@ -16,8 +16,12 @@ struct auth_observation {
     uint64_t observed_ns;
     unsigned int weight;
     unsigned int invalid_user;
+    unsigned int has_port;
+    unsigned int port;
+    unsigned int success_reported;
     char address[SSH_EVENT_IP_MAX];
     char username[SSH_EVENT_USER_MAX];
+    char pid[SSH_EVENT_PID_MAX];
 };
 
 static struct auth_observation observations[SSH_DETECTION_CAPACITY];
@@ -478,6 +482,59 @@ is_password_spray(const struct spray_metrics *metrics)
             SSH_DETECTION_SPRAY_PER_ACCOUNT_MAX;
 }
 
+static int
+is_accepted_authentication(enum ssh_event_type type)
+{
+    return type == SSH_EVENT_ACCEPTED_PASSWORD ||
+        type == SSH_EVENT_ACCEPTED_PUBLICKEY ||
+        type == SSH_EVENT_ACCEPTED_KEYBOARD_INTERACTIVE;
+}
+
+static void
+process_success_after_failures(const struct ssh_event *event,
+                               const char *address)
+{
+    unsigned long long failures = 0;
+    unsigned int i;
+    char safe_account[SSH_EVENT_USER_MAX];
+
+    if (!event->has_username || !event->has_port || !event->has_pid ||
+        event->username[0] == '\\0' || event->pid[0] == '\\0' ||
+        memchr(event->username, '\\0', sizeof(event->username)) == NULL ||
+        memchr(event->pid, '\\0', sizeof(event->pid)) == NULL)
+        return;
+
+    for (i = 0; i < count; ++i) {
+        unsigned int index = (head + i) % SSH_DETECTION_CAPACITY;
+        struct auth_observation *observation = &observations[index];
+
+        if (observation->success_reported || !observation->has_port ||
+            observation->port != event->port ||
+            strcmp(observation->address, address) != 0 ||
+            strcmp(observation->username, event->username) != 0 ||
+            strcmp(observation->pid, event->pid) != 0)
+            continue;
+
+        if (ULLONG_MAX - failures < observation->weight)
+            failures = ULLONG_MAX;
+        else
+            failures += observation->weight;
+        observation->success_reported = 1;
+    }
+
+    if (failures < SSH_DETECTION_SUCCESS_AFTER_FAILURE_THRESHOLD)
+        return;
+
+    increment_saturated(&detection_stats.success_after_failure_findings);
+    safe_username_label(event->username, safe_account, sizeof(safe_account));
+    logger_log("SSH_DETECTION",
+        "rule=ssh.authentication.success_after_failures address=%s port=%u pid=%s account=%s failures=%llu window_seconds=%u threshold=%u confidence=%s evidence=same_connection_failed_password_then_accepted",
+        address, event->port, event->pid, safe_account, failures,
+        SSH_DETECTION_WINDOW_SECONDS,
+        SSH_DETECTION_SUCCESS_AFTER_FAILURE_THRESHOLD,
+        detection_stats.partial_visibility ? "reduced" : "moderate");
+}
+
 void
 ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
 {
@@ -507,9 +564,16 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
      * diagnostics and transport errors may describe the same interaction and
      * are deliberately not counted as independent authentication attempts.
      */
-    if (event->type != SSH_EVENT_FAILED_PASSWORD || !event->has_address ||
+    if (!event->has_address ||
         !canonicalize_address(event->address, normalized_address,
                               sizeof(normalized_address)))
+        return;
+
+    if (is_accepted_authentication(event->type)) {
+        process_success_after_failures(event, normalized_address);
+        return;
+    }
+    if (event->type != SSH_EVENT_FAILED_PASSWORD)
         return;
 
     weight = event->is_repetition_summary ? event->repetition_count : 1U;
@@ -551,6 +615,11 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
     slot->observed_ns = now_ns;
     slot->weight = weight;
     slot->invalid_user = event->invalid_user != 0;
+    slot->has_port = event->has_port != 0;
+    slot->port = event->port;
+    if (event->has_pid && event->pid[0] != '\\0' &&
+        memchr(event->pid, '\\0', sizeof(event->pid)) != NULL)
+        (void)snprintf(slot->pid, sizeof(slot->pid), "%s", event->pid);
     (void)snprintf(slot->address, sizeof(slot->address), "%s", normalized_address);
     (void)snprintf(slot->username, sizeof(slot->username), "%s", normalized_username);
     ++count;
