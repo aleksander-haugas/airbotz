@@ -108,7 +108,36 @@ count_source_user_failures(const char *address, const char *username)
 struct spray_bucket {
     uint16_t observation_index;
     uint8_t weight;
+    uint32_t generation;
 };
+
+static struct spray_bucket spray_scratch[SPRAY_HASH_CAPACITY];
+static uint32_t spray_scratch_generation;
+
+static uint32_t
+begin_spray_scratch(void)
+{
+    if (spray_scratch_generation == UINT32_MAX) {
+        memset(spray_scratch, 0, sizeof(spray_scratch));
+        spray_scratch_generation = 1;
+    } else {
+        ++spray_scratch_generation;
+    }
+    return spray_scratch_generation;
+}
+
+static struct spray_bucket *
+get_spray_scratch_bucket(unsigned int slot, uint32_t generation)
+{
+    struct spray_bucket *bucket = &spray_scratch[slot];
+
+    if (bucket->generation != generation) {
+        bucket->generation = generation;
+        bucket->observation_index = 0;
+        bucket->weight = 0;
+    }
+    return bucket;
+}
 
 struct spray_metrics {
     unsigned long long total_attempts;
@@ -131,11 +160,10 @@ username_hash(const char *username)
 static struct spray_metrics
 get_spray_metrics(const char *address)
 {
-    struct spray_bucket buckets[SPRAY_HASH_CAPACITY];
+    uint32_t generation = begin_spray_scratch();
     struct spray_metrics metrics = {0, 0, 0};
     unsigned int i;
 
-    memset(buckets, 0, sizeof(buckets));
     for (i = 0; i < count; ++i) {
         const struct auth_observation *item =
             &observations[(head + i) % SSH_DETECTION_CAPACITY];
@@ -152,7 +180,7 @@ get_spray_metrics(const char *address)
 
         slot = username_hash(item->username) & (SPRAY_HASH_CAPACITY - 1U);
         for (probes = 0; probes < SPRAY_HASH_CAPACITY; ++probes) {
-            struct spray_bucket *bucket = &buckets[slot];
+            struct spray_bucket *bucket = get_spray_scratch_bucket(slot, generation);
 
             if (bucket->observation_index == 0) {
                 bucket->observation_index = (uint16_t)(i + 1U);
@@ -160,6 +188,8 @@ get_spray_metrics(const char *address)
                     SSH_DETECTION_SPRAY_PER_ACCOUNT_MAX ?
                     SSH_DETECTION_SPRAY_PER_ACCOUNT_MAX + 1U : item->weight;
                 ++metrics.distinct_accounts;
+                if (bucket->weight > metrics.maximum_account_attempts)
+                    metrics.maximum_account_attempts = bucket->weight;
                 break;
             }
             if (strcmp(observations[(head +
@@ -173,17 +203,14 @@ get_spray_metrics(const char *address)
                     else
                         bucket->weight += item->weight;
                 }
+                if (bucket->weight > metrics.maximum_account_attempts)
+                    metrics.maximum_account_attempts = bucket->weight;
                 break;
             }
             slot = (slot + 1U) & (SPRAY_HASH_CAPACITY - 1U);
         }
     }
 
-    for (i = 0; i < SPRAY_HASH_CAPACITY; ++i) {
-        if (buckets[i].observation_index != 0 &&
-            buckets[i].weight > metrics.maximum_account_attempts)
-            metrics.maximum_account_attempts = buckets[i].weight;
-    }
     return metrics;
 }
 
@@ -192,7 +219,36 @@ get_spray_metrics(const char *address)
 struct distributed_bucket {
     uint16_t observation_index;
     uint8_t weight;
+    uint32_t generation;
 };
+
+static struct distributed_bucket distributed_scratch[DISTRIBUTED_HASH_CAPACITY];
+static uint32_t distributed_scratch_generation;
+
+static uint32_t
+begin_distributed_scratch(void)
+{
+    if (distributed_scratch_generation == UINT32_MAX) {
+        memset(distributed_scratch, 0, sizeof(distributed_scratch));
+        distributed_scratch_generation = 1;
+    } else {
+        ++distributed_scratch_generation;
+    }
+    return distributed_scratch_generation;
+}
+
+static struct distributed_bucket *
+get_distributed_scratch_bucket(unsigned int slot, uint32_t generation)
+{
+    struct distributed_bucket *bucket = &distributed_scratch[slot];
+
+    if (bucket->generation != generation) {
+        bucket->generation = generation;
+        bucket->observation_index = 0;
+        bucket->weight = 0;
+    }
+    return bucket;
+}
 
 struct distributed_metrics {
     unsigned long long total_attempts;
@@ -216,11 +272,10 @@ address_hash(const char *address)
 static struct spray_metrics
 get_invalid_user_metrics(const char *address)
 {
-    struct spray_bucket buckets[SPRAY_HASH_CAPACITY];
+    uint32_t generation = begin_spray_scratch();
     struct spray_metrics metrics = {0, 0, 0};
     unsigned int i;
 
-    memset(buckets, 0, sizeof(buckets));
     for (i = 0; i < count; ++i) {
         const struct auth_observation *item =
             &observations[(head + i) % SSH_DETECTION_CAPACITY];
@@ -236,12 +291,14 @@ get_invalid_user_metrics(const char *address)
 
         slot = username_hash(item->username) & (SPRAY_HASH_CAPACITY - 1U);
         for (probes = 0; probes < SPRAY_HASH_CAPACITY; ++probes) {
-            struct spray_bucket *bucket = &buckets[slot];
+            struct spray_bucket *bucket = get_spray_scratch_bucket(slot, generation);
             if (bucket->observation_index == 0) {
                 bucket->observation_index = (uint16_t)(i + 1U);
                 bucket->weight = item->weight > SSH_DETECTION_INVALID_ENUM_PER_ACCOUNT_MAX ?
                     SSH_DETECTION_INVALID_ENUM_PER_ACCOUNT_MAX + 1U : item->weight;
                 ++metrics.distinct_accounts;
+                if (bucket->weight > metrics.maximum_account_attempts)
+                    metrics.maximum_account_attempts = bucket->weight;
                 break;
             }
             if (strcmp(observations[(head + bucket->observation_index - 1U) %
@@ -252,15 +309,13 @@ get_invalid_user_metrics(const char *address)
                     else
                         bucket->weight += item->weight;
                 }
+                if (bucket->weight > metrics.maximum_account_attempts)
+                    metrics.maximum_account_attempts = bucket->weight;
                 break;
             }
             slot = (slot + 1U) & (SPRAY_HASH_CAPACITY - 1U);
         }
     }
-    for (i = 0; i < SPRAY_HASH_CAPACITY; ++i)
-        if (buckets[i].observation_index != 0 &&
-            buckets[i].weight > metrics.maximum_account_attempts)
-            metrics.maximum_account_attempts = buckets[i].weight;
     return metrics;
 }
 
@@ -275,11 +330,10 @@ is_invalid_account_enumeration(const struct spray_metrics *metrics)
 static struct distributed_metrics
 get_distributed_metrics(const char *username)
 {
-    struct distributed_bucket buckets[DISTRIBUTED_HASH_CAPACITY];
+    uint32_t generation = begin_distributed_scratch();
     struct distributed_metrics metrics = {0, 0, 0};
     unsigned int i;
 
-    memset(buckets, 0, sizeof(buckets));
     for (i = 0; i < count; ++i) {
         const struct auth_observation *item =
             &observations[(head + i) % SSH_DETECTION_CAPACITY];
@@ -298,7 +352,7 @@ get_distributed_metrics(const char *username)
         slot = address_hash(item->address) &
             (DISTRIBUTED_HASH_CAPACITY - 1U);
         for (probes = 0; probes < DISTRIBUTED_HASH_CAPACITY; ++probes) {
-            struct distributed_bucket *bucket = &buckets[slot];
+            struct distributed_bucket *bucket = get_distributed_scratch_bucket(slot, generation);
 
             if (bucket->observation_index == 0) {
                 bucket->observation_index = (uint16_t)(i + 1U);
@@ -307,6 +361,8 @@ get_distributed_metrics(const char *username)
                     SSH_DETECTION_DISTRIBUTED_PER_SOURCE_MAX + 1U :
                     item->weight;
                 ++metrics.distinct_sources;
+                if (bucket->weight > metrics.maximum_source_attempts)
+                    metrics.maximum_source_attempts = bucket->weight;
                 break;
             }
             if (strcmp(observations[(head +
@@ -322,17 +378,14 @@ get_distributed_metrics(const char *username)
                     else
                         bucket->weight += item->weight;
                 }
+                if (bucket->weight > metrics.maximum_source_attempts)
+                    metrics.maximum_source_attempts = bucket->weight;
                 break;
             }
             slot = (slot + 1U) & (DISTRIBUTED_HASH_CAPACITY - 1U);
         }
     }
 
-    for (i = 0; i < DISTRIBUTED_HASH_CAPACITY; ++i) {
-        if (buckets[i].observation_index != 0 &&
-            buckets[i].weight > metrics.maximum_source_attempts)
-            metrics.maximum_source_attempts = buckets[i].weight;
-    }
     return metrics;
 }
 
