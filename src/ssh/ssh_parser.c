@@ -121,9 +121,12 @@ parse_port(const char *p, unsigned int *port)
     while (*p) {
         if (!isdigit((unsigned char)*p))
             return 0;
-        value = value * 10 + (unsigned long)(*p - '0');
-        if (value > 65535)
-            return 0;
+        {
+            unsigned long digit = (unsigned long)(*p - '0');
+            if (value > (65535UL - digit) / 10UL)
+                return 0;
+            value = value * 10UL + digit;
+        }
         p++;
     }
     if (value == 0)
@@ -152,7 +155,7 @@ extract_user_and_address(struct ssh_event *event, const char *text,
         user += 13;
         user_len -= 13;
     }
-    if (user_len) {
+    if (user_len && user_len < sizeof(event->username)) {
         copy_span(event->username, sizeof(event->username), user, user_len);
         event->has_username = 1;
     }
@@ -310,7 +313,7 @@ parse_decimal_range(const char *text, size_t length,
         if (!isdigit((unsigned char)text[i]))
             return 0;
         digit = (unsigned int)(text[i] - '0');
-        if (result > (maximum - digit) / 10U)
+        if (digit > maximum || result > (maximum - digit) / 10U)
             return 0;
         result = result * 10U + digit;
     }
@@ -382,8 +385,8 @@ valid_process_field(const char *field, size_t length,
     return 1;
 }
 
-int
-ssh_parse_record(const char *line, struct ssh_event *event)
+static int
+ssh_parse_record_cstr(const char *line, struct ssh_event *event)
 {
     const char *cursor, *field, *month_start;
     const char *day_start, *time_start, *hostname_start;
@@ -461,4 +464,41 @@ ssh_parse_record(const char *line, struct ssh_event *event)
     copy_span(event->message, sizeof(event->message), message, message_len);
     classify_message(event, message);
     return 0;
+}
+
+
+#define SSH_PARSE_RECORD_MAX 4096U
+
+int
+ssh_parse_record_n(const void *data, size_t length, struct ssh_event *event)
+{
+    char *record;
+    int result;
+
+    if (!event)
+        return -1;
+    memset(event, 0, sizeof(*event));
+    event->type = SSH_EVENT_UNKNOWN;
+
+    if (!data || length == 0 || length > SSH_PARSE_RECORD_MAX ||
+        memchr(data, '\0', length) != NULL)
+        return -1;
+
+    record = malloc(length + 1);
+    if (!record)
+        return -1;
+    memcpy(record, data, length);
+    record[length] = '\0';
+
+    result = ssh_parse_record_cstr(record, event);
+    free(record);
+    return result;
+}
+
+int
+ssh_parse_record(const char *line, struct ssh_event *event)
+{
+    if (!line || !event)
+        return -1;
+    return ssh_parse_record_n(line, strlen(line), event);
 }
