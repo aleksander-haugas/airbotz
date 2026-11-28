@@ -1,6 +1,6 @@
 # SSHD Detection Design — FreeBSD-first
 
-Status: source/account brute force, source password spraying, and source-address canonicalization are validated on FreeBSD 15.1. A bounded distributed brute-force rule (one account across multiple source IPs) is implemented and awaiting operator validation. Distributed spraying and other correlation families remain design work.
+Status: source/account brute force, source password spraying, source-address canonicalization, and bounded distributed brute force (one account across multiple source IPs) are validated on FreeBSD 15.1. Distributed spraying and other correlation families remain design work.
 
 This document defines the safety and data semantics required before AirBotz turns parsed SSHD records into detections. It does not enable PF actions, change the production configuration, or claim that the current parser is a complete OpenSSH grammar.
 
@@ -174,4 +174,4 @@ Both rules are deliberately bounded and observe-only. They use only normalized `
 - Thresholds require tuning against labelled benign and attack datasets. No inference should be drawn from the frequency of messages in a small reference corpus.
 - No PF command, address-manager mutation, service change or automatic block is invoked.
 
-Distributed targeting, invalid-account enumeration, success-after-failure, cross-source correlation and risk scoring remain future work.
+Distributed brute force against one account is implemented and validated; distributed password spraying across multiple accounts and source IPs, invalid-account enumeration, success-after-failure and risk scoring remain future work.
