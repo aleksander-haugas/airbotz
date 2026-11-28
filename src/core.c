@@ -4,6 +4,7 @@
 #include "logger.h"
 #include "pf.h"
 #include "ssh.h"
+#include "ssh_detection.h"
 #include "storage.h"
 
 #include <signal.h>
