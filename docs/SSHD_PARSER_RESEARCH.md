@@ -695,3 +695,13 @@ The third local corpus inventory surfaced two message shapes that the parser pre
 - `Address <address> maps to <hostname>, but this does not map back to the address - POSSIBLE BREAK-IN ATTEMPT!`: this is classified as `SSH_EVENT_REVERSE_DNS_WARNING`, extracting the address only when it is a valid IPv4/IPv6 literal. The full warning suffix is required; similar incomplete wording remains unknown. This is DNS forward-confirmation evidence, not proof of malicious activity.
 
 Synthetic regressions cover the observed IPv4 DNS form, a malformed near-match, a populated invalid username, and an empty username. These parser/test changes are committed as `9e77c60` and `38f78fc`; they await FreeBSD clean-build, full test and seeded-fuzz validation. The raw `SSH.log` and its source-address inventory remain local and are not committed.
+
+### 15.16 FreeBSD validation of additional invalid-user and reverse-DNS forms
+
+The operator pulled the parser/test changes through commit `65be9ff` and validated them on FreeBSD 15.1:
+- `make clean` and production `make` completed without compiler warnings.
+- `make test` passed all applicable tests; the root-only IPC test correctly skipped in the unprivileged run.
+- `sudo make test` passed, including root-only IPC socket permissions and client/server round trip.
+- Seeded `make fuzz-ssh` completed 7,180,354 executions in 61 seconds with `FUZZ_EXIT=0`; the supplied output showed no crash or sanitizer report.
+
+This validates the regression cases for `input_userauth_request: invalid user <username> [preauth]` and the strict reverse-DNS mismatch form. The invalid-user request record has no source address/port in the observed shape; the parser does not fabricate either. The two invalid-user message forms and related PAM/authentication records may describe the same underlying attempt, so future correlation must deduplicate cautiously rather than treating every line as an independent login attempt. Reverse-DNS mismatch remains contextual DNS evidence, not an attack verdict. The raw sample corpus and source-address inventory remain local and are not committed. R5.2 is closed; broader SSHD grammar, correlation and false-positive evaluation remain open.
