@@ -9,6 +9,7 @@
 #define SSH_EVENT_PID_MAX 16
 #define SSH_EVENT_TIME_MAX 32
 #define SSH_EVENT_IP_MAX 46
+#define SSH_EVENT_DISCONNECT_REASON_MAX 128
 
 enum ssh_event_type {
     SSH_EVENT_UNKNOWN = 0,
@@ -48,13 +49,17 @@ struct ssh_event {
     char username[SSH_EVENT_USER_MAX];
     char address[SSH_EVENT_IP_MAX];
     char message[SSH_EVENT_MESSAGE_MAX];
+    char disconnect_reason[SSH_EVENT_DISCONNECT_REASON_MAX];
     unsigned int port;
+    unsigned int disconnect_reason_code;
     unsigned int has_timestamp;
     unsigned int has_pid;
     unsigned int has_username;
     unsigned int has_address;
     unsigned int has_port;
     unsigned int invalid_user;
+    unsigned int has_disconnect_reason_code;
+    unsigned int has_disconnect_reason_text;
 };
 
 /*
