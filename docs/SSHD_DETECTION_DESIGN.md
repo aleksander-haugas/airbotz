@@ -1,6 +1,6 @@
 # SSHD Detection Design — FreeBSD-first
 
-Status: initial source brute-force detector implemented; FreeBSD operator validation pending. Additional correlation families remain design work.
+Status: initial source brute-force detector and its first FreeBSD validation are complete; source-address canonicalization follow-up is awaiting operator validation. Additional correlation families remain design work.
 
 This document defines the safety and data semantics required before AirBotz turns parsed SSHD records into detections. It does not enable PF actions, change the production configuration, or claim that the current parser is a complete OpenSSH grammar.
 
@@ -146,7 +146,7 @@ The first R6 implementation is deliberately narrow and observe-only:
 - The initial conservative baseline is 8 failed-password observations from one source within a 300-second monotonic window. These are engineering starting values, not thresholds inferred from the reference samples; later tuning must use labelled benign and attack datasets.
 - A syslog repetition summary contributes its explicit number of additional copies, not one plus that number. The summary remains one bounded observation and does not synthesize timestamps. The represented copies have reduced temporal precision because the summary does not carry timestamps for each copy.
 - The correlation store is a fixed 4096-entry ring. It expires entries by monotonic time and reports capacity evictions and a partial-visibility flag. A capacity eviction reduces finding confidence because older evidence may have been lost.
-- Source keys are exact parsed IP address strings in this first cut; later normalization may canonicalize alternate textual representations of the same IPv6 address.
+- Source keys are canonicalized with `inet_pton()` / `inet_ntop()` before correlation, so equivalent IPv4/IPv6 text forms share one key. Invalid or unterminated address fields are rejected from detection. IPv4-mapped IPv6 addresses remain in the IPv6 family and are not merged with native IPv4 addresses.
 - A finding is emitted once when the source count crosses the threshold, not on every subsequent failure while above threshold.
 - STATUS exposes observed failure-record count, finding count, active ring entries, capacity evictions and partial-visibility state.
 - No PF command, address-manager mutation, service change or automatic block is invoked.
