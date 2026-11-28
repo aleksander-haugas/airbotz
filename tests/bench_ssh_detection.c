@@ -26,7 +26,7 @@ struct scenario_info {
 };
 
 static const struct scenario_info scenarios[] = {
-    {BENCH_MIXED_NORMAL, "mixed_normal_70pct_accepted_20pct_failed_10pct_pam"},
+    {BENCH_MIXED_NORMAL, "mixed_normal_98.98pct_accepted_1pct_pam_0.02pct_failed"},
     {BENCH_SOURCE_BRUTE_FORCE, "source_account_bruteforce"},
     {BENCH_SOURCE_SPRAY, "single_source_password_spray"},
     {BENCH_DISTRIBUTED_SPRAY, "distributed_password_spray"},
@@ -84,16 +84,27 @@ make_benchmark_event(struct ssh_event *event,
 
     switch (scenario) {
     case BENCH_MIXED_NORMAL:
-        session_id = sequence / 10U;
-        source_id = session_id % 64U;
-        account_id = session_id % 128U;
-        set_identity(event, source_id, account_id, session_id);
-        if ((sequence % 10U) < 2U)
+        /*
+         * One isolated failure every 2500 records, followed by a success
+         * on the same tuple. Other records are mostly accepted auth with
+         * a small amount of PAM noise; this stays below detection thresholds.
+         */
+        if ((sequence % 2500U) == 0U) {
+            session_id = sequence;
             event->type = SSH_EVENT_FAILED_PASSWORD;
-        else if ((sequence % 10U) < 9U)
+        } else if ((sequence % 2500U) == 1U) {
+            session_id = sequence - 1U;
             event->type = SSH_EVENT_ACCEPTED_PASSWORD;
-        else
+        } else if ((sequence % 100U) == 2U) {
+            session_id = sequence;
             event->type = SSH_EVENT_PAM_AUTH_FAILURE;
+        } else {
+            session_id = sequence;
+            event->type = SSH_EVENT_ACCEPTED_PASSWORD;
+        }
+        source_id = session_id;
+        account_id = session_id;
+        set_identity(event, source_id, account_id, session_id);
         break;
 
     case BENCH_SOURCE_BRUTE_FORCE:
@@ -115,6 +126,9 @@ make_benchmark_event(struct ssh_event *event,
     default:
         event->type = SSH_EVENT_FAILED_PASSWORD;
         set_identity(event, source_id, account_id, session_id);
+        /* Exercise high-cardinality source events with no parsed username. */
+        event->has_username = 0;
+        event->username[0] = '\\0';
         break;
     }
 }
@@ -141,6 +155,7 @@ run_scenario(const struct scenario_info *scenario,
              struct ssh_event *events)
 {
     uint64_t samples[SAMPLE_COUNT];
+    struct ssh_detection_stats stats;
     uint64_t now_ns, sample_time_ns, start, finish;
     uint64_t minimum, maximum, median;
     unsigned int i, j, sequence = 0;
