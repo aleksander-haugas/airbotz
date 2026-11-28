@@ -201,15 +201,8 @@ classify_message(struct ssh_event *event, const char *message)
     } else if (strncmp(message, "Invalid user ", 13) == 0) {
         event->type = SSH_EVENT_INVALID_USER;
         extract_user_and_address(event, message + 13, " from ");
-    } else if (strstr(message, "authentication failure") != NULL) {
-        event->type = SSH_EVENT_PAM_AUTH_FAILURE;
-        p = strstr(message, "rhost=");
-        if (p) {
-            p += 6;
-            if (is_ip_address(p, strcspn(p, " \t;"),
-                              event->address, sizeof(event->address)))
-                event->has_address = 1;
-        }
+    } else if (strncmp(message, "Disconnecting:", 14) == 0) {
+        event->type = SSH_EVENT_SERVER_DISCONNECT;
     } else if (strncmp(message, "Received disconnect from ", 25) == 0) {
         event->type = SSH_EVENT_RECEIVED_DISCONNECT;
         const char *address_end;
@@ -221,6 +214,15 @@ classify_message(struct ssh_event *event, const char *message)
             event->has_address = 1;
     } else if (strncmp(message, "Disconnecting:", 14) == 0) {
         event->type = SSH_EVENT_SERVER_DISCONNECT;
+    } else if (strstr(message, "authentication failure") != NULL) {
+        event->type = SSH_EVENT_PAM_AUTH_FAILURE;
+        p = strstr(message, "rhost=");
+        if (p) {
+            p += 6;
+            if (is_ip_address(p, strcspn(p, " \t;"),
+                              event->address, sizeof(event->address)))
+                event->has_address = 1;
+        }
     } else if (strncmp(message, "Connection closed", 17) == 0 ||
                strncmp(message, "Disconnected from", 18) == 0) {
         event->type = SSH_EVENT_CONNECTION_CLOSED;
