@@ -1,6 +1,6 @@
 # SSHD Detection Design — FreeBSD-first
 
-Status: source/account brute force, source password spraying, source-address canonicalization, distributed brute force (one account across multiple source IPs), and distributed password spraying are validated on FreeBSD 15.1. Invalid-account enumeration is implemented and awaiting FreeBSD operator validation.
+Status: the first five observe-only detection rules are validated on FreeBSD 15.1. Success-after-failure has an initial strict same-connection implementation and awaits FreeBSD operator validation.
 
 This document defines the safety and data semantics required before AirBotz turns parsed SSHD records into detections. It does not enable PF actions, change the production configuration, or claim that the current parser is a complete OpenSSH grammar.
 
@@ -12,7 +12,7 @@ The current branch has:
 - a production log tailer with partial-line handling, oversized-record discard, rename rotation and copytruncate recovery;
 - dispatch into the core, which writes normalized SSH event summaries and invokes six bounded observe-only detectors: source/account brute force, source password spraying, distributed brute force, distributed password spraying, invalid-account enumeration, and success after failures.
 
-The core includes bounded SSH detections for repeated failures against one account from one source, low-rate failures spread across multiple accounts from one source, and repeated failures against one account spread across multiple source IPs. Unknown events are still ignored by the SSH callback. Risk scoring and richer alert reporting are not implemented. No SSH-triggered PF response exists.
+The core includes bounded SSH detections for source/account brute force, source and distributed password spraying, distributed brute force, invalid-account enumeration, and success after failures on an exact connection tuple. Unknown events are still ignored by the SSH callback. Risk scoring and richer alert reporting are not implemented. No SSH-triggered PF response exists.
 
 The reader opens the configured log at EOF on daemon startup. It intentionally does not replay historical records. A deleted/missing path after startup is currently retried by the reader, but SSH source health and event-loss telemetry are not exposed as a complete status contract.
 
@@ -191,8 +191,6 @@ Both rules are deliberately bounded and observe-only. They use only normalized `
 - The threshold is provisional and requires labelled-corpus and deployment-specific evaluation.
 
 ### 11.7 Shared evidence and limits
-
-
 
 - A syslog repetition summary contributes its explicit number of additional copies, not one plus that number. The summary remains one bounded observation and does not synthesize timestamps. The represented copies have reduced temporal precision.
 - The correlation store is a fixed 4096-entry ring. It expires entries by monotonic time and reports capacity evictions and partial visibility. The pre-event detection state is evaluated after any required eviction, so an evicted observation cannot incorrectly suppress a threshold crossing.
