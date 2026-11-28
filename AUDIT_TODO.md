@@ -50,6 +50,7 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` verified and closed.
   - [~] Additional third-corpus predicates: 432 `Failed none`, 838 `Did not receive identification string`, 1,126 `error:` and 961 `fatal:` matches; 182 `Accepted ` matches. Broad `Failed ` count is 198,019 and includes `Failed none`. These are overlapping raw-line predicates, not deduplicated attempts.
 
   - [~] Third-corpus examples add `Failed none`, `Did not receive identification string`, fatal read/write reset errors, client/server disconnect distinctions, separate PAM summary/max-retries records, successful-password/session lifecycle records, and reverse-DNS warnings. Independent predicate counts are recorded in `docs/SSHD_PARSER_RESEARCH.md`; they are raw line counts, not deduplicated attempts.
+  - [~] Further `SSH.log` examples confirm `error: Received disconnect` variants (SSH reason codes 3 and 14) and `fatal:` read/write `Connection reset by peer` variants. Preserve OpenSSH severity independently from disconnect direction and transport cause; these prefixes do not by themselves establish server failure or malicious activity. Grouping accepted-password records by method/user/IP (without source port) found repeated groups up to 25 records; these are not proven unique or concurrent sessions. Details and representative examples are in research section 14.8.
 
 - [ ] R3. Define normalized event schema, timestamp semantics, session correlation keys and parser grammar.
 - [ ] R4. Implement bounded syslog-envelope and sshd-message parsing; preserve unknown events safely.
