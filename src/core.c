@@ -183,6 +183,81 @@ handle_ipc_request(const char *request, char *response, size_t response_size,
     return -1;
 }
 
+static const char *
+ssh_event_name(enum ssh_event_type type)
+{
+    switch (type) {
+    case SSH_EVENT_FAILED_PASSWORD: return "failed_password";
+    case SSH_EVENT_FAILED_NONE: return "failed_none";
+    case SSH_EVENT_ACCEPTED_PASSWORD: return "accepted_password";
+    case SSH_EVENT_ACCEPTED_PUBLICKEY: return "accepted_publickey";
+    case SSH_EVENT_ACCEPTED_KEYBOARD_INTERACTIVE: return "accepted_keyboard_interactive";
+    case SSH_EVENT_INVALID_USER: return "invalid_user";
+    case SSH_EVENT_PAM_AUTH_FAILURE: return "pam_auth_failure";
+    case SSH_EVENT_RECEIVED_DISCONNECT: return "received_disconnect";
+    case SSH_EVENT_SERVER_DISCONNECT: return "server_disconnect";
+    case SSH_EVENT_CONNECTION_CLOSED: return "connection_closed";
+    case SSH_EVENT_SESSION_OPENED: return "session_opened";
+    case SSH_EVENT_SESSION_CLOSED: return "session_closed";
+    case SSH_EVENT_PAM_CHECK_PASS: return "pam_check_pass";
+    case SSH_EVENT_PAM_FAILURE_SUMMARY: return "pam_failure_summary";
+    case SSH_EVENT_PAM_MAX_RETRIES: return "pam_max_retries";
+    case SSH_EVENT_REVERSE_DNS_WARNING: return "reverse_dns_warning";
+    case SSH_EVENT_IDENTIFICATION_MISSING: return "identification_missing";
+    case SSH_EVENT_SSHD_ERROR: return "sshd_error";
+    case SSH_EVENT_SSHD_FATAL: return "sshd_fatal";
+    case SSH_EVENT_TRANSPORT_ERROR: return "transport_error";
+    case SSH_EVENT_UNKNOWN:
+    default: return "unknown";
+    }
+}
+
+static void
+handle_ssh_event(const struct ssh_event *event, void *context)
+{
+    const char *severity = "unknown";
+    const char *phase = "unknown";
+    const char *operation = "unknown";
+    const char *cause = "unknown";
+
+    (void)context;
+    if (!event || event->type == SSH_EVENT_UNKNOWN)
+        return;
+
+    if (event->severity == SSH_LOG_SEVERITY_ERROR)
+        severity = "error";
+    else if (event->severity == SSH_LOG_SEVERITY_FATAL)
+        severity = "fatal";
+    if (event->auth_phase == SSH_AUTH_PHASE_PREAUTH)
+        phase = "preauth";
+
+    switch (event->transport_operation) {
+    case SSH_TRANSPORT_OP_READ: operation = "read"; break;
+    case SSH_TRANSPORT_OP_WRITE: operation = "write"; break;
+    case SSH_TRANSPORT_OP_IDENTIFICATION: operation = "identification"; break;
+    case SSH_TRANSPORT_OP_KEY_EXCHANGE: operation = "key_exchange"; break;
+    case SSH_TRANSPORT_OP_NEGOTIATION: operation = "negotiation"; break;
+    default: break;
+    }
+    switch (event->transport_cause) {
+    case SSH_TRANSPORT_CAUSE_CONNECTION_RESET: cause = "connection_reset"; break;
+    case SSH_TRANSPORT_CAUSE_TIMEOUT: cause = "timeout"; break;
+    case SSH_TRANSPORT_CAUSE_BROKEN_PIPE: cause = "broken_pipe"; break;
+    case SSH_TRANSPORT_CAUSE_EOF: cause = "eof"; break;
+    default: break;
+    }
+
+    logger_log("SSH",
+        "type=%s severity=%s phase=%s pid=%s user=%s address=%s port=%s%u operation=%s cause=%s",
+        ssh_event_name(event->type), severity, phase,
+        event->has_pid ? event->pid : "-",
+        event->has_username ? event->username : "-",
+        event->has_address ? event->address : "-",
+        event->has_port ? "" : "-",
+        event->has_port ? event->port : 0U,
+        operation, cause);
+}
+
 int
 core_init(const char *path)
 {
@@ -230,7 +305,7 @@ core_init(const char *path)
         }
     }
 
-    if (ssh_init(cfg.ssh_log) != 0) {
+    if (ssh_init(cfg.ssh_log, handle_ssh_event, NULL) != 0) {
         logger_log("ERROR", "Cannot open SSH log %s", cfg.ssh_log);
         core_shutdown();
         return -1;
