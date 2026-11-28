@@ -239,6 +239,37 @@ int main(void) {
         assert(event.type == SSH_EVENT_REVERSE_DNS_WARNING);
         assert(strcmp(event.address, "198.51.100.45") == 0);
 
+        /* OpenSSH's alternate forward-confirmation mismatch wording. */
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: Address 173.82.194.233 maps to 233-194-82-173-dedicated.multacom.com, but this does not map back to the address - POSSIBLE BREAK-IN ATTEMPT!",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_REVERSE_DNS_WARNING);
+        assert(event.has_address);
+        assert(strcmp(event.address, "173.82.194.233") == 0);
+
+        /* Similar wording without the complete warning suffix stays unknown. */
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: Address 173.82.194.233 maps to example.invalid",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_UNKNOWN);
+
+        /* input_userauth_request is a distinct record for the same invalid account. */
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: input_userauth_request: invalid user admin [preauth]",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_INVALID_USER);
+        assert(event.invalid_user && event.has_username);
+        assert(strcmp(event.username, "admin") == 0);
+        assert(event.auth_phase == SSH_AUTH_PHASE_PREAUTH);
+        assert(!event.has_address && !event.has_port);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: input_userauth_request: invalid user  [preauth]",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_INVALID_USER);
+        assert(event.invalid_user && !event.has_username);
+        assert(event.auth_phase == SSH_AUTH_PHASE_PREAUTH);
+
         assert(ssh_parse_record(
             "Dec 10 06:55:46 LabSZ sshd[24200]: Did not receive identification string from 203.0.113.45",
             &event) == 0);
