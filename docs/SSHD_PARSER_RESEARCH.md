@@ -1,6 +1,6 @@
 # SSHD Parser Research and Detection Engineering Log
 
-Status: research baseline documented; implementation work intentionally paused pending sample corpus review.
+Status: research baseline and initial parser implementation in progress; corpus-driven parser hardening, adversarial testing and correlation design remain open.
 Scope: OpenSSH/sshd authentication and connection logs consumed by AirBotz on FreeBSD. This document is the working source of truth for parser research, evidence, hypotheses, tests, and implementation decisions.
 
 ## 1. Objectives
@@ -573,3 +573,18 @@ The parser now exposes `ssh_parse_record_n(const void *data, size_t length, stru
 The same review hardened numeric port extraction: decimal accumulation checks the 65535 bound before multiplication/addition, preventing unsigned wraparound on very long digit sequences. Username extraction no longer silently truncates an oversized username into a different-looking identity; the username field remains unavailable while other independently parsed evidence (such as source address) can still be retained. Decimal range parsing also guards the digit-versus-maximum comparison before subtraction.
 
 Synthetic regression tests cover embedded NUL rejection with trailing data, valid non-NUL-terminated byte slices, very long decimal ports and usernames exceeding the fixed field. These changes have been committed but are awaiting operator validation and a repeat fuzz campaign on FreeBSD. Do not treat the first fuzz run as validation of the new length-aware implementation.
+
+
+### 15.4 Explicit-length parser validation and seeded fuzz corpus
+
+The operator validated commit `4ec5c0e` on FreeBSD 15.1:
+- `make clean` and production `make` completed without compiler warnings.
+- `make test` passed all applicable non-root tests: SSH parser, PF, SSH log rotation, storage and address manager. The IPC integration test correctly skipped because the run was unprivileged; its separate root-only timeout issue remains tracked under I4.
+- `make fuzz-ssh` used Clang 19.1.7 with libFuzzer, AddressSanitizer and UndefinedBehaviorSanitizer. The length-aware harness passed the original byte array and explicit length into `ssh_parse_record_n()`, rather than allowing an embedded NUL to hide trailing bytes.
+- The 61-second run completed 29,924,832 executions, reached 70 coverage counters and 194 features, and reported no crash or sanitizer finding.
+
+The campaign began without a seed corpus. The fuzzer's reported peak RSS reached approximately 573 MiB; this is the instrumented fuzz process, not the production daemon, but it should be monitored during longer campaigns and when running on constrained systems.
+
+A sanitized synthetic seed corpus has now been added under `tests/fuzz_ssh_corpus/` with 20 records using documentation-only TEST-NET IPv4/IPv6 addresses. It covers failed/accepted authentication methods, invalid users, PAM evidence, reverse-DNS warnings, missing identification, client/server disconnects, connection closure, session lifecycle, severity-prefixed disconnects and fatal transport errors. The `make fuzz-ssh` target now passes this directory to libFuzzer so mutations begin from valid parser paths rather than only arbitrary short bytes.
+
+Next validation must run the updated `make fuzz-ssh` on FreeBSD and compare final coverage/features with the empty-corpus baseline. A larger coverage number is useful only if it corresponds to meaningful new parser paths; it is not itself a security guarantee. The seed files are synthetic and contain no raw user log data or observed source IP inventory.
