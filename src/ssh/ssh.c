@@ -66,7 +66,7 @@ dispatch_pending_record(void)
     if (!dropping_record && record_length != 0)
         dispatch_record(record_buffer, record_length);
     else if (dropping_record) {
-        reader_stats.records_seen++;
+        counter_increment(&reader_stats.records_seen);
         counter_increment(&reader_stats.records_oversized);
         reader_stats.last_record_time = time(NULL);
         logger_log("WARN", "SSH log record exceeded parser limit; discarded");
@@ -92,8 +92,8 @@ process_available(void)
             if (!dropping_record && record_length != 0)
                 dispatch_record(record_buffer, record_length);
             else if (dropping_record) {
-                reader_stats.records_seen++;
-                reader_stats.records_oversized++;
+                counter_increment(&reader_stats.records_seen);
+                counter_increment(&reader_stats.records_oversized);
                 reader_stats.last_record_time = time(NULL);
                 logger_log("WARN", "SSH log record exceeded parser limit; discarded");
             }
