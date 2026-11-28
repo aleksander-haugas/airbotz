@@ -426,6 +426,31 @@ main(void)
     assert(stats.capacity_evictions == 1);
     assert(stats.partial_visibility == 1);
 
+    /*
+     * Username-less failures remain in the bounded ring and count toward
+     * eviction telemetry, but cannot trigger username-based detections.
+     */
+    ssh_detection_reset();
+    for (i = 0; i < SSH_DETECTION_CAPACITY + 1U; ++i) {
+        char address[SSH_EVENT_IP_MAX];
+        (void)snprintf(address, sizeof(address), "198.18.%u.%u",
+                       (i / 250U) % 256U, (i % 250U) + 1U);
+        event = failure(address, "not-used");
+        event.has_username = 0;
+        event.username[0] = '\0';
+        ssh_detection_process_at(&event, 1500 * SECOND + (uint64_t)i);
+    }
+    ssh_detection_get_stats_at(&stats, 1500 * SECOND +
+                               SSH_DETECTION_CAPACITY + 1U);
+    assert(stats.active_observations == SSH_DETECTION_CAPACITY);
+    assert(stats.capacity_evictions == 1);
+    assert(stats.auth_failures_observed == SSH_DETECTION_CAPACITY + 1U);
+    assert(stats.brute_force_findings == 0);
+    assert(stats.password_spray_findings == 0);
+    assert(stats.distributed_brute_force_findings == 0);
+    assert(stats.distributed_password_spray_findings == 0);
+    assert(stats.invalid_account_enumeration_findings == 0);
+
     /* Monotonic time regression is clamped, not used to extend/reset windows. */
     ssh_detection_reset();
     event = failure("192.0.2.60", "root");
