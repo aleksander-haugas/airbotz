@@ -7,11 +7,15 @@
 
 #define SSH_DETECTION_WINDOW_SECONDS 300U
 #define SSH_DETECTION_BRUTE_FORCE_THRESHOLD 8U
+#define SSH_DETECTION_SPRAY_ATTEMPT_THRESHOLD 8U
+#define SSH_DETECTION_SPRAY_ACCOUNT_THRESHOLD 5U
+#define SSH_DETECTION_SPRAY_PER_ACCOUNT_MAX 2U
 #define SSH_DETECTION_CAPACITY 4096U
 
 struct ssh_detection_stats {
     unsigned long long auth_failures_observed;
     unsigned long long brute_force_findings;
+    unsigned long long password_spray_findings;
     unsigned long long capacity_evictions;
     unsigned int active_observations;
     unsigned int partial_visibility;
