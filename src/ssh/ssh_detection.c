@@ -186,25 +186,6 @@ is_password_spray(const struct spray_metrics *metrics)
             SSH_DETECTION_SPRAY_PER_ACCOUNT_MAX;
 }
 
-static unsigned long long
-count_source_failures(const char *address)
-{
-    unsigned long long total = 0;
-    unsigned int i;
-
-    for (i = 0; i < count; ++i) {
-        const struct auth_observation *item =
-            &observations[(head + i) % SSH_DETECTION_CAPACITY];
-
-        if (strcmp(item->address, address) == 0) {
-            if (ULLONG_MAX - total < item->weight)
-                return ULLONG_MAX;
-            total += item->weight;
-        }
-    }
-    return total;
-}
-
 void
 ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
 {
