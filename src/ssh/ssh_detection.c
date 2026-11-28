@@ -234,9 +234,6 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
                        "%s", event->username);
 
     increment_saturated(&detection_stats.auth_failures_observed);
-    previous = normalized_username[0] != '\0' ?
-        count_source_user_failures(normalized_address, normalized_username) : 0;
-    spray_before = get_spray_metrics(normalized_address);
 
     if (count == SSH_DETECTION_CAPACITY) {
         memset(&observations[head], 0, sizeof(observations[head]));
@@ -246,6 +243,11 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
         degraded_until_ns = now_ns > UINT64_MAX - WINDOW_NS ?
             UINT64_MAX : now_ns + WINDOW_NS;
     }
+
+    /* Evaluate the pre-event state after any capacity eviction. */
+    previous = normalized_username[0] != '\0' ?
+        count_source_user_failures(normalized_address, normalized_username) : 0;
+    spray_before = get_spray_metrics(normalized_address);
 
     tail = (head + count) % SSH_DETECTION_CAPACITY;
     slot = &observations[tail];
