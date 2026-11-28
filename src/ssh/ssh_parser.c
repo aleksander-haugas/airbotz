@@ -254,10 +254,13 @@ classify_message(struct ssh_event *event, const char *message)
             port_end = port_start;
             while (*port_end && isdigit((unsigned char)*port_end))
                 port_end++;
-            copy_span(port_buffer, sizeof(port_buffer), port_start,
-                      (size_t)(port_end - port_start));
-            if (parse_port(port_buffer, &event->port))
-                event->has_port = 1;
+            if (port_end > port_start &&
+                (size_t)(port_end - port_start) < sizeof(port_buffer)) {
+                copy_span(port_buffer, sizeof(port_buffer), port_start,
+                          (size_t)(port_end - port_start));
+                if (parse_port(port_buffer, &event->port))
+                    event->has_port = 1;
+            }
             cursor = port_end;
             while (*cursor && isspace((unsigned char)*cursor))
                 cursor++;
