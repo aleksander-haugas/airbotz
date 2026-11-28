@@ -56,6 +56,20 @@ count_distributed_findings(const char *path)
 }
 
 static unsigned int
+count_distributed_spray_findings(const char *path)
+{
+    FILE *file = fopen(path, "r");
+    char line[1024];
+    unsigned int found = 0;
+    assert(file != NULL);
+    while (fgets(line, sizeof(line), file) != NULL)
+        if (strstr(line, "rule=ssh.password_spray.distributed"))
+            ++found;
+    fclose(file);
+    return found;
+}
+
+static unsigned int
 count_findings(const char *path)
 {
     FILE *file = fopen(path, "r");
@@ -194,6 +208,34 @@ main(void)
     }
     ssh_detection_get_stats_at(&stats, 967 * SECOND);
     assert(stats.distributed_brute_force_findings == 0);
+
+    /* Distributed password spray: many sources, many accounts, low per-key rates. */
+    ssh_detection_reset();
+    for (i = 0; i < 10; ++i) {
+        char address[SSH_EVENT_IP_MAX];
+        char username[SSH_EVENT_USER_MAX];
+        (void)snprintf(address, sizeof(address), "203.0.113.%u", 10U + i / 2U);
+        (void)snprintf(username, sizeof(username), "target%u", i % 5U);
+        event = failure(address, username);
+        ssh_detection_process_at(&event, (uint64_t)(980 + i) * SECOND);
+    }
+    assert(count_distributed_spray_findings(path) == 1);
+    ssh_detection_get_stats_at(&stats, 989 * SECOND);
+    assert(stats.distributed_password_spray_findings == 1);
+    assert(stats.distributed_brute_force_findings == 0);
+    assert(stats.password_spray_findings == 0);
+    assert(stats.brute_force_findings == 0);
+
+    /* A single source spraying many accounts is not distributed spraying. */
+    ssh_detection_reset();
+    for (i = 0; i < 8; ++i) {
+        char username[SSH_EVENT_USER_MAX];
+        (void)snprintf(username, sizeof(username), "single%u", i);
+        event = failure("203.0.113.40", username);
+        ssh_detection_process_at(&event, (uint64_t)(1000 + i) * SECOND);
+    }
+    ssh_detection_get_stats_at(&stats, 1007 * SECOND);
+    assert(stats.distributed_password_spray_findings == 0);
 
     /* Malformed address text must never become a source key. */
     ssh_detection_reset();
