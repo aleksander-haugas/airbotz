@@ -103,7 +103,7 @@ main(void)
     event = failure("192.0.2.50", "root");
     event.has_address = 0;
     ssh_detection_process_at(&event, 601 * SECOND);
-    ssh_detection_get_stats(&stats);
+    ssh_detection_get_stats_at(&stats, 601 * SECOND);
     assert(stats.auth_failures_observed == 0);
 
     /* The fixed ring never exceeds capacity; overflow is visible. */
@@ -114,7 +114,7 @@ main(void)
         event = failure(address, "root");
         ssh_detection_process_at(&event, 1000 * SECOND + (uint64_t)i);
     }
-    ssh_detection_get_stats(&stats);
+    ssh_detection_get_stats_at(&stats, 1000 * SECOND + SSH_DETECTION_CAPACITY + 1U);
     assert(stats.active_observations == SSH_DETECTION_CAPACITY);
     assert(stats.capacity_evictions == 1);
     assert(stats.partial_visibility == 1);
@@ -124,7 +124,7 @@ main(void)
     event = failure("192.0.2.60", "root");
     ssh_detection_process_at(&event, 2000 * SECOND);
     ssh_detection_process_at(&event, 1990 * SECOND);
-    ssh_detection_get_stats(&stats);
+    ssh_detection_get_stats_at(&stats, 2000 * SECOND);
     assert(stats.active_observations == 2);
 
     logger_close();
