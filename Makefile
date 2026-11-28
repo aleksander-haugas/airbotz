@@ -42,7 +42,7 @@ tests/fuzz_ssh_parser: tests/fuzz_ssh_parser.c src/ssh/ssh_parser.c include/ssh_
 	$(FUZZ_CC) $(FUZZ_CFLAGS) -o $@ tests/fuzz_ssh_parser.c src/ssh/ssh_parser.c
 
 fuzz-ssh: tests/fuzz_ssh_parser
-	./tests/fuzz_ssh_parser -max_len=4096 -max_total_time=60
+	./tests/fuzz_ssh_parser -max_len=4096 -max_total_time=60 tests/fuzz_ssh_corpus
 
 clean:
 	rm -f $(OBJ) airbotz tests/test_ssh tests/test_pf tests/test_pf_live tests/test_ssh_rotation tests/test_storage tests/test_address_manager tests/fuzz_ssh_parser
