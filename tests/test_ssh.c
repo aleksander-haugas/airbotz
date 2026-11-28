@@ -210,6 +210,41 @@ int main(void) {
             "Dec 10 06:55:46 LabSZ sshd-session[314]: Accepted publickey for jmzhu from 2001:db8::1 port 22 ssh2",
             &event) == 0);
 
+
+        /* Length-aware parsing must reject binary NULs, not ignore suffix bytes. */
+        {
+            static const char binary_record[] =
+                "Dec 10 06:55:46 LabSZ sshd[24200]: first\\0hidden";
+            static const char valid_record[] =
+                "Dec 10 06:55:46 LabSZ sshd[24200]: first";
+            assert(ssh_parse_record_n(binary_record,
+                                      sizeof(binary_record) - 1, &event) == -1);
+            assert(ssh_parse_record_n(valid_record,
+                                      sizeof(valid_record) - 1, &event) == 0);
+        }
+
+        /* A decimal port with many digits must not wrap and become valid. */
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: Failed password for root from 192.0.2.1 port 999999999999999999999999999999999999999999 ssh2",
+            &event) == 0);
+        assert(!event.has_port);
+
+        /* Oversized usernames are not silently truncated into another identity. */
+        {
+            char long_user[512];
+            const char *prefix =
+                "Dec 10 06:55:46 LabSZ sshd[24200]: Failed password for ";
+            const char *suffix = " from 192.0.2.1 port 22 ssh2";
+            size_t pos = strlen(prefix);
+            memcpy(long_user, prefix, pos);
+            memset(long_user + pos, 'u', 200);
+            pos += 200;
+            memcpy(long_user + pos, suffix, strlen(suffix) + 1);
+            assert(ssh_parse_record(long_user, &event) == 0);
+            assert(!event.has_username);
+            assert(event.has_address);
+        }
+
         /* Reject embedded line breaks and overlong message bodies, not truncate them. */
         assert(ssh_parse_record(
             "Dec 10 06:55:46 LabSZ sshd[24200]: first line\nsecond line",
