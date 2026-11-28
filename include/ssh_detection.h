@@ -21,6 +21,7 @@
 #define SSH_DETECTION_INVALID_ENUM_ATTEMPT_THRESHOLD 8U
 #define SSH_DETECTION_INVALID_ENUM_ACCOUNT_THRESHOLD 5U
 #define SSH_DETECTION_INVALID_ENUM_PER_ACCOUNT_MAX 2U
+#define SSH_DETECTION_SUCCESS_AFTER_FAILURE_THRESHOLD 3U
 #define SSH_DETECTION_CAPACITY 4096U
 
 struct ssh_detection_stats {
@@ -30,6 +31,7 @@ struct ssh_detection_stats {
     unsigned long long distributed_brute_force_findings;
     unsigned long long distributed_password_spray_findings;
     unsigned long long invalid_account_enumeration_findings;
+    unsigned long long success_after_failure_findings;
     unsigned long long capacity_evictions;
     unsigned int active_observations;
     unsigned int partial_visibility;
