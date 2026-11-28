@@ -93,6 +93,12 @@ int main(void)
     ssh_get_stats(&stats);
     assert(stats.source_available == 1 && stats.records_seen == 0);
 
+    /* A deterministic read failure is counted and the reader recovers next poll. */
+    ssh_test_inject_read_error();
+    ssh_process();
+    ssh_get_stats(&stats);
+    assert(stats.read_errors == 1 && stats.source_available == 1);
+
     write_file(log_path, event1, 1);
     ssh_process();
     assert(observed.failed_password == 1);
