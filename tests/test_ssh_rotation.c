@@ -146,18 +146,18 @@ int main(void)
 
     /* Oversized records are discarded through newline; the next record survives. */
     {
-        char oversized[5000];
+        char oversized[5001];
         const char *prefix =
             "Dec 10 06:55:54 testhost sshd[1009]: ";
         const char *next =
             "\nDec 10 06:55:55 testhost sshd[1010]: Failed password for next from 192.0.2.9 port 22 ssh2\n";
         size_t prefix_len = strlen(prefix);
         size_t next_len = strlen(next);
-        memset(oversized, 'X', sizeof(oversized));
+        memset(oversized, 'X', sizeof(oversized) - 1);
+        oversized[sizeof(oversized) - 1] = '\0';
         memcpy(oversized, prefix, prefix_len);
         memcpy(oversized + sizeof(oversized) - next_len,
                next, next_len);
-        oversized[sizeof(oversized) - 1] = '\0';
         write_file(log_path, oversized, 1);
         ssh_process();
         assert(observed.failed_password == 10);
