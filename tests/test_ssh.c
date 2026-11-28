@@ -29,6 +29,11 @@ int main(void) {
         ip, sizeof(ip)));
     assert(strcmp(ip, "192.0.2.8") == 0);
 
+    assert(ssh_extract_address(
+        "sshd-session: Connection closed by invalid user test, ::1 port 46960 [preauth]",
+        ip, sizeof(ip)));
+    assert(strcmp(ip, "::1") == 0);
+
     assert(!ssh_extract_address(
         "sshd: Failed password for root from not-an-ip port 22",
         ip, sizeof(ip)));
