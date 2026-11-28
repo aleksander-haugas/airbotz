@@ -198,17 +198,38 @@ classify_transport(struct ssh_event *event, const char *body)
         event->transport_operation = SSH_TRANSPORT_OP_READ;
     } else if (strncmp(body, "Write failed:", 13) == 0) {
         event->transport_operation = SSH_TRANSPORT_OP_WRITE;
-    } else if (strstr(body, "banner exchange:") != NULL) {
+    } else if (strncmp(body, "banner exchange:", 16) == 0) {
         event->transport_operation = SSH_TRANSPORT_OP_IDENTIFICATION;
-    } else if (strstr(body, "kex_exchange_identification") != NULL) {
+    } else if (strncmp(body, "kex_exchange_identification",
+                       sizeof("kex_exchange_identification") - 1) == 0) {
         event->transport_operation = SSH_TRANSPORT_OP_KEY_EXCHANGE;
-    } else if (strstr(body, "Unable to negotiate") != NULL ||
-               strstr(body, "no matching ") != NULL) {
+    } else if (strncmp(body, "Unable to negotiate",
+                       sizeof("Unable to negotiate") - 1) == 0 ||
+               strncmp(body, "no matching ",
+                       sizeof("no matching ") - 1) == 0) {
         event->transport_operation = SSH_TRANSPORT_OP_NEGOTIATION;
     }
 
+    /*
+     * Only interpret a cause when the message is anchored by a recognized
+     * transport operation, or when the cause itself is the whole message
+     * prefix. Incidental words in unrelated diagnostics must not promote
+     * them into transport events.
+     */
+    if (event->transport_operation == SSH_TRANSPORT_OP_UNKNOWN &&
+        strncmp(body, "Connection reset",
+                sizeof("Connection reset") - 1) != 0 &&
+        strncmp(body, "Connection timed out",
+                sizeof("Connection timed out") - 1) != 0 &&
+        strncmp(body, "Operation timed out",
+                sizeof("Operation timed out") - 1) != 0 &&
+        strncmp(body, "Broken pipe", sizeof("Broken pipe") - 1) != 0 &&
+        strncmp(body, "End of file", sizeof("End of file") - 1) != 0 &&
+        strncmp(body, "unexpected EOF", sizeof("unexpected EOF") - 1) != 0)
+        return 0;
+
     if (strstr(body, "Connection reset by peer") != NULL ||
-        strstr(body, "Connection reset") != NULL) {
+        strncmp(body, "Connection reset", sizeof("Connection reset") - 1) == 0) {
         event->transport_cause = SSH_TRANSPORT_CAUSE_CONNECTION_RESET;
     } else if (strstr(body, "Connection timed out") != NULL ||
                strstr(body, "Operation timed out") != NULL) {
