@@ -610,3 +610,13 @@ The parser now extends `SSH_EVENT_RECEIVED_DISCONNECT` with independently bounde
 The parser recognizes both observed forms with no source port (for example `Received disconnect from 203.0.113.8: 11: Bye Bye [preauth]`) and forms containing a port (for example `Received disconnect from 203.0.113.9 port 49152: 3: Auth fail [preauth]`). An `error:`-prefixed disconnect remains one `SSH_EVENT_RECEIVED_DISCONNECT` event with error severity. The reason code and text are only marked present when their respective bounded parsing succeeds; malformed/out-of-range codes are not partially accepted. This data is descriptive evidence, not an attack verdict. In particular, text such as `No more user authentication methods available` is peer-supplied disconnect context, not proof of an sshd internal error.
 
 Synthetic tests use TEST-NET addresses and cover reason codes 3, 11 and 14, IPv4/IPv6, optional ports, severity prefixes and malformed numeric codes. The implementation also rejects overlong source-port tokens rather than truncating them into a potentially valid value. Regression coverage includes an eight-digit zero-padded token. Commits: `4e22d39`, `7b02946`, `50ebbcb`, `2dfe587`, `457d54c`. These commits have not yet been validated by the operator on FreeBSD; the next validation must include a clean warning-free build, the full applicable test suite, and the seeded fuzz target. Authentication phase extraction and transport operation/cause remain separate follow-up work.
+
+
+### 15.6 Follow-up fuzz campaign after disconnect-reason parser changes
+
+After the disconnect-reason extraction changes, the operator supplied the final output of another seeded 61-second libFuzzer campaign:
+- 7,221,103 executions completed.
+- The recommended dictionary included relevant message fragments such as `Received disconnect from `, `PAM service(sshd) ignoring max retries;`, `more authentication failures;`, `session opened/closed for user`, `rhost=`, `[preauth]`, and authentication method prefixes, alongside binary mutation tokens.
+- No crash or sanitizer report appeared in the supplied output excerpt.
+
+This is evidence that the fuzzer continued to exercise message-shaped and malformed byte sequences. The excerpt did not include final coverage/feature/RSS statistics, and it is not a substitute for the new unit tests or a full clean build. The disconnect-reason implementation remains pending explicit confirmation of `make clean && make` and `make test` on FreeBSD. R5 remains open; fuzz success does not prove correctness.
