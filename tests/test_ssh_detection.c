@@ -24,6 +24,22 @@ failure(const char *address, const char *username)
 }
 
 static unsigned int
+count_spray_findings(const char *path)
+{
+    FILE *file = fopen(path, "r");
+    char line[1024];
+    unsigned int found = 0;
+
+    assert(file != NULL);
+    while (fgets(line, sizeof(line), file) != NULL) {
+        if (strstr(line, "rule=ssh.password_spray.source"))
+            ++found;
+    }
+    fclose(file);
+    return found;
+}
+
+static unsigned int
 count_findings(const char *path)
 {
     FILE *file = fopen(path, "r");
@@ -32,7 +48,7 @@ count_findings(const char *path)
 
     assert(file != NULL);
     while (fgets(line, sizeof(line), file) != NULL) {
-        if (strstr(line, "rule=ssh.bruteforce.source"))
+        if (strstr(line, "rule=ssh.bruteforce.source_account"))
             ++found;
     }
     fclose(file);
@@ -55,7 +71,7 @@ main(void)
 
     /* Seven failures are below threshold; the eighth crosses it once. */
     for (i = 0; i < 7; ++i) {
-        event = failure("192.0.2.10", i % 2 ? "root" : "admin");
+        event = failure("192.0.2.10", "root");
         ssh_detection_process_at(&event, (uint64_t)(10 + i) * SECOND);
     }
     assert(count_findings(path) == 0);
@@ -107,6 +123,34 @@ main(void)
     ssh_detection_process_at(&event, 807 * SECOND);
     assert(count_findings(path) == 3);
 
+    /* Broad low-rate account targeting is a spray, not brute force. */
+    ssh_detection_reset();
+    for (i = 0; i < 8; ++i) {
+        char username[SSH_EVENT_USER_MAX];
+        (void)snprintf(username, sizeof(username), "account%u", i / 2U);
+        event = failure("192.0.2.70", username);
+        ssh_detection_process_at(&event, (uint64_t)(900 + i) * SECOND);
+    }
+    assert(count_spray_findings(path) == 0);
+    ssh_detection_get_stats_at(&stats, 907 * SECOND);
+    assert(stats.brute_force_findings == 0);
+    event = failure("192.0.2.70", "account4");
+    ssh_detection_process_at(&event, 908 * SECOND);
+    assert(count_spray_findings(path) == 1);
+    ssh_detection_get_stats_at(&stats, 908 * SECOND);
+    assert(stats.password_spray_findings == 1);
+    assert(stats.brute_force_findings == 0);
+
+    /* Repeated targeting of one account is brute force, not password spray. */
+    ssh_detection_reset();
+    for (i = 0; i < 8; ++i) {
+        event = failure("192.0.2.71", "single-account");
+        ssh_detection_process_at(&event, (uint64_t)(920 + i) * SECOND);
+    }
+    ssh_detection_get_stats_at(&stats, 927 * SECOND);
+    assert(stats.brute_force_findings == 1);
+    assert(stats.password_spray_findings == 0);
+
     /* Malformed address text must never become a source key. */
     ssh_detection_reset();
     event = failure("not-an-ip-address", "root");
@@ -148,6 +192,6 @@ main(void)
 
     logger_close();
     assert(unlink(path) == 0);
-    puts("PASS: SSH bounded brute-force correlation windows, threshold, expiry, summaries and capacity telemetry");
+    puts("PASS: SSH brute-force and password-spray correlation, windows, thresholds, expiry, summaries and capacity telemetry");
     return 0;
 }
