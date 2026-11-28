@@ -57,8 +57,12 @@ dispatch_pending_record(void)
 {
     if (!dropping_record && record_length != 0)
         dispatch_record(record_buffer, record_length);
-    else if (dropping_record)
+    else if (dropping_record) {
+        reader_stats.records_seen++;
+        reader_stats.records_oversized++;
+        reader_stats.last_record_time = time(NULL);
         logger_log("WARN", "SSH log record exceeded parser limit; discarded");
+    }
     reset_record_buffer();
 }
 
@@ -75,6 +79,7 @@ process_available(void)
 
     clearerr(logf);
     while ((ch = fgetc(logf)) != EOF) {
+        reader_stats.last_read_time = time(NULL);
         if (ch == '\n') {
             if (!dropping_record && record_length != 0)
                 dispatch_record(record_buffer, record_length);
@@ -88,7 +93,6 @@ process_available(void)
             continue;
         }
 
-        reader_stats.last_read_time = time(NULL);
         if (dropping_record)
             continue;
         if (record_length == sizeof(record_buffer)) {
