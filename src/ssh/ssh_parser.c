@@ -295,16 +295,95 @@ classify_message(struct ssh_event *event, const char *message)
     }
 }
 
+static int
+parse_decimal_range(const char *text, size_t length,
+                    unsigned int minimum, unsigned int maximum,
+                    unsigned int *value)
+{
+    size_t i;
+    unsigned int result = 0;
+
+    if (!text || length == 0 || !value)
+        return 0;
+    for (i = 0; i < length; i++) {
+        unsigned int digit;
+        if (!isdigit((unsigned char)text[i]))
+            return 0;
+        digit = (unsigned int)(text[i] - '0');
+        if (result > (maximum - digit) / 10U)
+            return 0;
+        result = result * 10U + digit;
+    }
+    if (result < minimum || result > maximum)
+        return 0;
+    *value = result;
+    return 1;
+}
+
+static int
+valid_month(const char *month)
+{
+    static const char *const months[] = {
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    };
+    size_t i;
+
+    for (i = 0; i < sizeof(months) / sizeof(months[0]); i++) {
+        if (memcmp(month, months[i], 3) == 0)
+            return 1;
+    }
+    return 0;
+}
+
+static int
+valid_process_field(const char *field, size_t length,
+                    char *pid_out, size_t pid_cap)
+{
+    const char *prefix;
+    size_t prefix_len;
+    size_t pid_len;
+    unsigned int pid_value;
+
+    if (length > 5 && memcmp(field, "sshd[", 5) == 0) {
+        prefix = "sshd[";
+        prefix_len = 5;
+    } else if (length > 13 &&
+               memcmp(field, "sshd-session[", 13) == 0) {
+        prefix = "sshd-session[";
+        prefix_len = 13;
+    } else {
+        return 0;
+    }
+
+    (void)prefix;
+    if (field[length - 1] != ':')
+        return 0;
+    if (length < prefix_len + 3 ||
+        field[length - 2] != ']')
+        return 0;
+
+    pid_len = length - prefix_len - 2;
+    if (pid_len == 0 || pid_len >= pid_cap ||
+        !parse_decimal_range(field + prefix_len, pid_len,
+                             1U, 2147483647U, &pid_value))
+        return 0;
+
+    copy_span(pid_out, pid_cap, field + prefix_len, pid_len);
+    return 1;
+}
+
 int
 ssh_parse_record(const char *line, struct ssh_event *event)
 {
     const char *cursor, *field, *month_start;
-    size_t length;
-    char process[64];
+    const char *day_start, *time_start, *hostname_start;
+    const char *process_start, *message_start, *end;
+    size_t length, day_len, time_len, hostname_len, process_len;
+    size_t message_len;
+    unsigned int day, hour, minute, second;
+    char timestamp[SSH_EVENT_TIME_MAX];
     char message[SSH_EVENT_MESSAGE_MAX];
-    char *colon;
-    const char *message_start;
-    const char *end;
 
     if (!line || !event)
         return -1;
@@ -312,71 +391,64 @@ ssh_parse_record(const char *line, struct ssh_event *event)
     event->type = SSH_EVENT_UNKNOWN;
 
     cursor = line;
-    if (!next_field(&cursor, &field, &length))
+    if (!next_field(&cursor, &field, &length) || length != 3 ||
+        !valid_month(field))
         return -1;
     month_start = field;
-    if (length != 3)
-        return -1;
-    {
-        char month[4];
-        copy_span(month, sizeof(month), field, length);
-        if (strstr("JanFebMarAprMayJunJulAugSepOctNovDec", month) == NULL)
-            return -1;
-    }
-    {
-        const char *day_start;
-        size_t day_len;
-        const char *time_start;
-        size_t time_len;
-        char timestamp[SSH_EVENT_TIME_MAX];
-        if (!next_field(&cursor, &day_start, &day_len) ||
-            !next_field(&cursor, &time_start, &time_len) ||
-            !next_field(&cursor, &field, &length))
-            return -1;
-        if (day_len == 0 || day_len > 2 || time_len != 8 ||
-            time_start[2] != ':' || time_start[5] != ':')
-            return -1;
-        if (snprintf(timestamp, sizeof(timestamp), "%.*s %.*s %.*s",
-                     (int)3, month_start, (int)day_len, day_start,
-                     (int)time_len, time_start) < 0)
-            return -1;
-        copy_span(event->timestamp, sizeof(event->timestamp),
-                  timestamp, strlen(timestamp));
-        event->has_timestamp = 1;
-        copy_span(event->hostname, sizeof(event->hostname), field, length);
-    }
 
-    if (!next_field(&cursor, &field, &length))
+    if (!next_field(&cursor, &day_start, &day_len) ||
+        !next_field(&cursor, &time_start, &time_len) ||
+        !next_field(&cursor, &hostname_start, &hostname_len))
         return -1;
-    copy_span(process, sizeof(process), field, length);
-    colon = strchr(process, ':');
-    if (!colon)
-        return -1;
-    message_start = field + (colon - process) + 1;
-    *colon = '\0';
-    if (strncmp(process, "sshd[", 5) != 0 &&
-        strncmp(process, "sshd-session[", 13) != 0)
-        return -1;
-    {
-        const char *pid_start = strchr(process, '[');
-        const char *pid_end = strrchr(process, ']');
-        if (pid_start && pid_end && pid_end > pid_start + 1) {
-            copy_span(event->pid, sizeof(event->pid), pid_start + 1,
-                      (size_t)(pid_end - pid_start - 1));
-            event->has_pid = 1;
-        }
-    }
 
+    if (day_len > 2 ||
+        !parse_decimal_range(day_start, day_len, 1U, 31U, &day) ||
+        time_len != 8 || time_start[2] != ':' || time_start[5] != ':' ||
+        !parse_decimal_range(time_start, 2, 0U, 23U, &hour) ||
+        !parse_decimal_range(time_start + 3, 2, 0U, 59U, &minute) ||
+        !parse_decimal_range(time_start + 6, 2, 0U, 59U, &second))
+        return -1;
+
+    if (hostname_len == 0 || hostname_len >= sizeof(event->hostname))
+        return -1;
+
+    if (snprintf(timestamp, sizeof(timestamp), "%.*s %.*s %.*s",
+                 3, month_start, (int)day_len, day_start,
+                 (int)time_len, time_start) < 0)
+        return -1;
+    copy_span(event->timestamp, sizeof(event->timestamp),
+              timestamp, strlen(timestamp));
+    event->has_timestamp = 1;
+    copy_span(event->hostname, sizeof(event->hostname),
+              hostname_start, hostname_len);
+
+    if (!next_field(&cursor, &process_start, &process_len) ||
+        !valid_process_field(process_start, process_len,
+                             event->pid, sizeof(event->pid)))
+        return -1;
+    event->has_pid = 1;
+
+    message_start = cursor;
     while (*message_start && isspace((unsigned char)*message_start))
         message_start++;
     end = message_start + strlen(message_start);
     while (end > message_start &&
-           (end[-1] == '\r' || end[-1] == '\n'))
+           (end[-1] == '\\r' || end[-1] == '\\n'))
         end--;
-    copy_span(message, sizeof(message), message_start,
-              (size_t)(end - message_start));
-    copy_span(event->message, sizeof(event->message), message,
-              strlen(message));
+    message_len = (size_t)(end - message_start);
+
+    if (message_len == 0 || message_len >= sizeof(message))
+        return -1;
+    {
+        const char *scan;
+        for (scan = message_start; scan < end; scan++) {
+            if (*scan == '\\r' || *scan == '\\n')
+                return -1;
+        }
+    }
+
+    copy_span(message, sizeof(message), message_start, message_len);
+    copy_span(event->message, sizeof(event->message), message, message_len);
     classify_message(event, message);
     return 0;
 }
