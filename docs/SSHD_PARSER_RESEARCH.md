@@ -398,3 +398,39 @@ Parser/catalogue implications:
 - Preserve `error:` and `fatal:` severity prefixes independently from parsed causes such as socket reset. The same record may have both a severity and a transport-error attribute.
 - Preserve raw syslog timestamp text and hostname. Do not invent a year or timezone for this corpus.
 - The sample's first/last displayed timestamps are not enough to determine exact coverage, ordering across year rollover, or elapsed time. Record them as observed endpoints only.
+
+### 14.8 Error/fatal variants and repeated successful-authentication groups
+
+Further operator-run extraction of the same local `SSH.log` produced these representative message bodies:
+
+- `error: Received disconnect from <address>: 3: com.jcraft.jsch.JSchException: Auth fail [preauth]`
+- `error: Received disconnect from <address>: 14: No more user authentication methods available. [preauth]`
+- `fatal: Write failed: Connection reset by peer [preauth]`
+- `fatal: Read from socket failed: Connection reset by peer [preauth]`
+
+Interpretation and parser requirements:
+
+- The `error:` prefix is an OpenSSH log-severity label; the message body still describes a received/client-originated disconnect. Preserve the severity and the disconnect direction as separate attributes.
+- Preserve the numeric SSH disconnect reason code (examples 3 and 14) and the peer-supplied reason text as separate fields. Do not treat the JSch exception text or “No more user authentication methods available” as a local sshd internal failure.
+- The `fatal:` prefix must also be preserved independently from the cause. In the observed examples, the cause is a peer-side TCP reset during a read or write while still in `[preauth]`. This is not evidence by itself that the sshd daemon or host failed, nor proof of an attack.
+- The parser should recognize the underlying `Received disconnect` grammar both with and without a leading severity prefix, emitting one normalized disconnect event per raw record (not separate error and disconnect events).
+- Keep transport operation (`Read` / `Write`), socket cause (`Connection reset by peer`), OpenSSH severity and authentication phase as distinct attributes.
+
+The operator also grouped `Accepted` records by authentication method, username and source address, deliberately omitting source port. The highest observed groups were:
+
+| Accepted-password account | Source address | Matching records |
+|---|---|---:|
+| hxu | 111.222.107.90 | 25 |
+| fztu | 119.137.63.195 | 14 |
+| curi | 61.187.54.9 | 12 |
+| curi | 137.189.241.248 | 11 |
+| curi | 137.189.90.232 | 10 |
+| fztu | 119.137.62.123 | 9 |
+| zachary | 218.17.80.182 | 7 |
+| curi | 222.240.177.42 | 7 |
+| jmzhu | 222.125.40.98 | 6 |
+| jmzhu | 113.116.236.34 | 6 |
+
+These are repeated accepted-authentication log records grouped by a textual key, not proven unique TCP connections, concurrent sessions or malicious activity. Repeated records may represent reconnects or repeated logins. Further correlation must use the syslog timestamp, sshd PID, source port, session-open/close records and other available connection context. Do not pair records by adjacency alone.
+
+The corpus therefore adds two important modeling constraints: (1) log severity and security impact are separate dimensions; (2) accepted authentication is an outcome event, while session establishment and subsequent activity are separate evidence. A successful login should not be labeled malicious solely because it repeats or comes from an unfamiliar address.
