@@ -443,7 +443,7 @@ ssh_parse_record(const char *line, struct ssh_event *event)
         message_start++;
     end = message_start + strlen(message_start);
     while (end > message_start &&
-           (end[-1] == '\\r' || end[-1] == '\\n'))
+           (end[-1] == '\r' || end[-1] == '\n'))
         end--;
     message_len = (size_t)(end - message_start);
 
@@ -452,7 +452,7 @@ ssh_parse_record(const char *line, struct ssh_event *event)
     {
         const char *scan;
         for (scan = message_start; scan < end; scan++) {
-            if (*scan == '\\r' || *scan == '\\n')
+            if (*scan == '\r' || *scan == '\n')
                 return -1;
         }
     }
