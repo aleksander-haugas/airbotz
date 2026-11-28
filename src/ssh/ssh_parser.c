@@ -279,18 +279,22 @@ classify_message(struct ssh_event *event, const char *message)
         event->type = SSH_EVENT_SESSION_OPENED;
         while (*e && !isspace((unsigned char)*e))
             e++;
-        copy_span(event->username, sizeof(event->username), u,
-                  (size_t)(e - u));
-        event->has_username = (e != u);
+        if (e > u && (size_t)(e - u) < sizeof(event->username)) {
+            copy_span(event->username, sizeof(event->username), u,
+                      (size_t)(e - u));
+            event->has_username = 1;
+        }
     } else if ((p = strstr(body, "session closed for user ")) != NULL) {
         const char *u = p + 24;
         const char *e = u;
         event->type = SSH_EVENT_SESSION_CLOSED;
         while (*e && !isspace((unsigned char)*e))
             e++;
-        copy_span(event->username, sizeof(event->username), u,
-                  (size_t)(e - u));
-        event->has_username = (e != u);
+        if (e > u && (size_t)(e - u) < sizeof(event->username)) {
+            copy_span(event->username, sizeof(event->username), u,
+                      (size_t)(e - u));
+            event->has_username = 1;
+        }
     } else if (event->severity == SSH_LOG_SEVERITY_FATAL) {
         event->type = SSH_EVENT_SSHD_FATAL;
     } else if (event->severity == SSH_LOG_SEVERITY_ERROR) {
@@ -390,7 +394,7 @@ ssh_parse_record_cstr(const char *line, struct ssh_event *event)
 {
     const char *cursor, *field, *month_start;
     const char *day_start, *time_start, *hostname_start;
-    const char *process_start, *message_start, *end;
+    const char *process_start, *message_start, *end, *record_end, *scan;
     size_t length, day_len, time_len, hostname_len, process_len;
     size_t message_len;
     unsigned int day, hour, minute, second;
@@ -401,6 +405,24 @@ ssh_parse_record_cstr(const char *line, struct ssh_event *event)
         return -1;
     memset(event, 0, sizeof(*event));
     event->type = SSH_EVENT_UNKNOWN;
+
+    /*
+     * Permit one optional LF, CRLF, or CR record terminator, but reject
+     * embedded line breaks anywhere in the syslog envelope or message.
+     * Otherwise next_field() could silently parse across record boundaries.
+     */
+    record_end = line + strlen(line);
+    if (record_end > line && record_end[-1] == '\n') {
+        record_end--;
+        if (record_end > line && record_end[-1] == '\r')
+            record_end--;
+    } else if (record_end > line && record_end[-1] == '\r') {
+        record_end--;
+    }
+    for (scan = line; scan < record_end; scan++) {
+        if (*scan == '\r' || *scan == '\n')
+            return -1;
+    }
 
     cursor = line;
     if (!next_field(&cursor, &field, &length) || length != 3 ||
