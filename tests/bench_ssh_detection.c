@@ -89,7 +89,7 @@ make_benchmark_event(struct ssh_event *event,
          * on the same tuple. Other records are mostly accepted auth with
          * a small amount of PAM noise; this stays below detection thresholds.
          */
-        if ((sequence % 2500U) == 0U) {
+        if ((sequence % 5000U) == 0U) {
             session_id = sequence;
             event->type = SSH_EVENT_FAILED_PASSWORD;
         } else if ((sequence % 2500U) == 1U) {
