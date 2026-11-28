@@ -34,6 +34,16 @@ tests/test_address_manager: tests/test_address_manager.c src/address_manager.c s
 tests/test_ipc: tests/test_ipc.c src/ipc.c
 	$(CC) $(CFLAGS) -o $@ tests/test_ipc.c src/ipc.c
 
+# Optional Clang/libFuzzer target; never part of the production build.
+FUZZ_CC?=clang
+FUZZ_CFLAGS?=-O1 -g -Iinclude -D_POSIX_C_SOURCE=200809L -std=c11 -Wall -Wextra -Wpedantic -fsanitize=fuzzer,address,undefined -fno-omit-frame-pointer
+
+tests/fuzz_ssh_parser: tests/fuzz_ssh_parser.c src/ssh/ssh_parser.c include/ssh_parser.h
+	$(FUZZ_CC) $(FUZZ_CFLAGS) -o $@ tests/fuzz_ssh_parser.c src/ssh/ssh_parser.c
+
+fuzz-ssh: tests/fuzz_ssh_parser
+	./tests/fuzz_ssh_parser -max_len=4096 -max_total_time=60
+
 clean:
 	rm -f $(OBJ) airbotz tests/test_ssh tests/test_pf tests/test_pf_live tests/test_ssh_rotation tests/test_storage tests/test_address_manager
 
@@ -54,4 +64,4 @@ install: airbotz
 	install -m 0640 config/airbotz.conf $(DESTDIR)$(PREFIX)/etc/airbotz/airbotz.conf.sample
 	install -m 0555 rc.d/airbotz $(DESTDIR)$(PREFIX)/etc/rc.d/airbotz
 
-.PHONY: all clean test test-pf-live test_address_manager install
+.PHONY: all clean test test-pf-live fuzz-ssh test_address_manager install
