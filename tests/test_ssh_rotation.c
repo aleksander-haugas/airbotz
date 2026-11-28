@@ -45,19 +45,6 @@ static void write_file(const char *path, const char *text, int append)
     assert(close(fd) == 0);
 }
 
-static int count_text(const char *path, const char *needle)
-{
-    FILE *f = fopen(path, "r");
-    char line[1024];
-    int count = 0;
-
-    assert(f != NULL);
-    while (fgets(line, sizeof(line), f))
-        if (strstr(line, needle) != NULL)
-            count++;
-    fclose(f);
-    return count;
-}
 
 int main(void)
 {
@@ -66,7 +53,7 @@ int main(void)
     const char *event1 =
         "Dec 10 06:55:46 testhost sshd[1001]: Failed password for root from 192.0.2.1 port 22 ssh2\n";
     const char *event2 =
-        "Dec 10 06:55:47 testhost sshd[1002]: Failed password for root from 192.0.2.2 port 22 ssh2\n";
+        "Dec 10 06:55:47 testhost sshd[1002]: Failed password for root from 192.0.2.2 port 22 ssh2";
     const char *event3 =
         "Dec 10 06:55:48 testhost sshd[1003]: Failed password for root from 192.0.2.3 port 22 ssh2\n";
     const char *long_event =
@@ -145,6 +132,37 @@ int main(void)
     ssh_process();
     assert(observed.failed_password == 8);
     assert(strcmp(observed.last_address, "192.0.2.6") == 0);
+
+    /* A partial record is held until its newline arrives. */
+    write_file(log_path,
+        "Dec 10 06:55:53 testhost sshd[1008]: Failed password for partial from 192.0.2.8 port 22 ssh2",
+        1);
+    ssh_process();
+    assert(observed.failed_password == 8);
+    write_file(log_path, "\n", 1);
+    ssh_process();
+    assert(observed.failed_password == 9);
+    assert(strcmp(observed.last_address, "192.0.2.8") == 0);
+
+    /* Oversized records are discarded through newline; the next record survives. */
+    {
+        char oversized[5000];
+        const char *prefix =
+            "Dec 10 06:55:54 testhost sshd[1009]: ";
+        const char *next =
+            "\nDec 10 06:55:55 testhost sshd[1010]: Failed password for next from 192.0.2.9 port 22 ssh2\n";
+        size_t prefix_len = strlen(prefix);
+        size_t next_len = strlen(next);
+        memset(oversized, 'X', sizeof(oversized));
+        memcpy(oversized, prefix, prefix_len);
+        memcpy(oversized + sizeof(oversized) - next_len,
+               next, next_len);
+        oversized[sizeof(oversized) - 1] = '\0';
+        write_file(log_path, oversized, 1);
+        ssh_process();
+        assert(observed.failed_password == 10);
+        assert(strcmp(observed.last_address, "192.0.2.9") == 0);
+    }
 
     ssh_shutdown();
     logger_close();
