@@ -100,7 +100,7 @@ handle_ipc_request(const char *request, char *response, size_t response_size,
             ssh_get_stats(&ss);
             ssh_detection_get_stats(&ds);
             snprintf(response, response_size,
-                "OK running permanent=%zu temporary=%zu pf=%s pf_temp_entries=%s pf_perm_entries=%s ssh_source=%s ssh_seen=%llu ssh_parsed=%llu ssh_classified=%llu ssh_unknown=%llu ssh_malformed=%llu ssh_oversized=%llu ssh_read_errors=%llu ssh_rotations=%llu ssh_missing=%llu ssh_recovered=%llu ssh_last_read=%lld ssh_last_record=%lld ssh_auth_failures=%llu ssh_bruteforce_findings=%llu ssh_password_spray_findings=%llu ssh_distributed_bruteforce_findings=%llu ssh_distributed_password_spray_findings=%llu ssh_invalid_account_enumeration_findings=%llu ssh_detection_active=%u ssh_detection_evictions=%llu ssh_detection_partial=%u\n",
+                "OK running permanent=%zu temporary=%zu pf=%s pf_temp_entries=%s pf_perm_entries=%s ssh_source=%s ssh_seen=%llu ssh_parsed=%llu ssh_classified=%llu ssh_unknown=%llu ssh_malformed=%llu ssh_oversized=%llu ssh_read_errors=%llu ssh_rotations=%llu ssh_missing=%llu ssh_recovered=%llu ssh_last_read=%lld ssh_last_record=%lld ssh_auth_failures=%llu ssh_bruteforce_findings=%llu ssh_password_spray_findings=%llu ssh_distributed_bruteforce_findings=%llu ssh_distributed_password_spray_findings=%llu ssh_invalid_account_enumeration_findings=%llu ssh_success_after_failure_findings=%llu ssh_detection_active=%u ssh_detection_evictions=%llu ssh_detection_partial=%u\n",
                 manager->permanent_count, manager->temporary_count,
                 pf_state, temp_state, perm_state,
                 ss.source_available ? "available" : "unavailable", ss.records_seen,
@@ -111,7 +111,7 @@ handle_ipc_request(const char *request, char *response, size_t response_size,
                 ds.auth_failures_observed, ds.brute_force_findings,
                 ds.password_spray_findings, ds.distributed_brute_force_findings,
                 ds.distributed_password_spray_findings, ds.invalid_account_enumeration_findings,
-                ds.active_observations, ds.capacity_evictions, ds.partial_visibility);
+                ds.success_after_failure_findings, ds.active_observations, ds.capacity_evictions, ds.partial_visibility);
         }
         return 0;
     }
