@@ -101,6 +101,14 @@ int main(void) {
         assert(strcmp(event.disconnect_reason, "Bye Bye") == 0);
         assert(!event.has_port);
 
+        /* Peer-supplied reason text must not override disconnect direction. */
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: Received disconnect from 203.0.113.12: 2: Connection reset [preauth]",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_RECEIVED_DISCONNECT);
+        assert(event.has_disconnect_reason_text);
+        assert(strcmp(event.disconnect_reason, "Connection reset") == 0);
+
         assert(ssh_parse_record(
             "Dec 10 06:55:46 LabSZ sshd[24200]: Received disconnect from 2001:db8::8: 11: Bye Bye [preauth]",
             &event) == 0);
