@@ -1,6 +1,6 @@
 # SSHD Detection Design — FreeBSD-first
 
-Status: source/account brute force, source password spraying, source-address canonicalization, distributed brute force (one account across multiple source IPs), and distributed password spraying are validated on FreeBSD 15.1.
+Status: source/account brute force, source password spraying, source-address canonicalization, distributed brute force (one account across multiple source IPs), and distributed password spraying are validated on FreeBSD 15.1. Invalid-account enumeration is implemented and awaiting operator validation.
 
 This document defines the safety and data semantics required before AirBotz turns parsed SSHD records into detections. It does not enable PF actions, change the production configuration, or claim that the current parser is a complete OpenSSH grammar.
 
@@ -12,7 +12,7 @@ The current branch has:
 - a production log tailer with partial-line handling, oversized-record discard, rename rotation and copytruncate recovery;
 - dispatch into the core, which writes normalized SSH event summaries and invokes four bounded observe-only detectors: source/account brute force, source password spraying, distributed brute force, and distributed password spraying.
 
-The core includes bounded SSH detections for repeated failures against one account from one source, low-rate failures spread across multiple accounts from one source, and repeated failures against one account spread across multiple source IPs. Unknown events are still ignored by the SSH callback. Invalid-account enumeration, success-after-failure, risk scoring and richer alert reporting are not implemented. No SSH-triggered PF response exists.
+The core includes bounded SSH detections for repeated failures against one account from one source, low-rate failures spread across multiple accounts from one source, and repeated failures against one account spread across multiple source IPs. Unknown events are still ignored by the SSH callback. Success-after-failure, risk scoring and richer alert reporting are not implemented. No SSH-triggered PF response exists.
 
 The reader opens the configured log at EOF on daemon startup. It intentionally does not replay historical records. A deleted/missing path after startup is currently retried by the reader, but SSH source health and event-loss telemetry are not exposed as a complete status contract.
 
@@ -172,7 +172,7 @@ Both rules are deliberately bounded and observe-only. They use only normalized `
 - Emits a single observe-only finding on threshold crossing. No PF action is taken.
 - Thresholds are provisional and require labelled benign/attack corpus evaluation before production tuning.
 
-### 11.5 Shared evidence and limits
+### 11.5 Invalid-account enumeration (implementation pending operator validation)\n\n- Counts only `SSH_EVENT_FAILED_PASSWORD` records whose parser explicitly sets `invalid_user`, with a valid source address and parsed non-empty username. The separate `input_userauth_request: invalid user` diagnostic has no source IP in the currently supported shape and is not counted as an independent attempt.\n- Provisional trigger: at least 8 failed-password observations from one canonical source in 300 seconds, at least 5 distinct invalid usernames, and no more than 2 observations for any one username.\n- A repeated guess against one invalid username is not enumeration. Valid-account failures do not contribute. The rule is a heuristic and can still be triggered by legitimate scanners or inventory checks.\n- Uses the existing bounded observation ring and fixed hash aggregation; emits one observe-only finding on threshold crossing. STATUS exposes `ssh_invalid_account_enumeration_findings`. No PF action is taken.\n- Thresholds require labelled-corpus and deployment-specific tuning.\n\n### 11.6 Shared evidence and limits
 
 - A syslog repetition summary contributes its explicit number of additional copies, not one plus that number. The summary remains one bounded observation and does not synthesize timestamps. The represented copies have reduced temporal precision.
 - The correlation store is a fixed 4096-entry ring. It expires entries by monotonic time and reports capacity evictions and partial visibility. The pre-event detection state is evaluated after any required eviction, so an evicted observation cannot incorrectly suppress a threshold crossing.
