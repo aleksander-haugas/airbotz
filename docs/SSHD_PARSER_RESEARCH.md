@@ -493,3 +493,32 @@ Interpretation:
 - The high-volume single-account examples are consistent with concentrated brute-force activity, but temporal distribution and session boundaries are still needed.
 - Counts are corpus-specific, extracted from exact `Failed password` message forms and syslog repetition summaries. They are not calibrated detection thresholds and must not be used as universal blocking rules.
 - The source file remains local; no raw log or IP list has been committed as a reference sample.
+
+
+### 14.11 Temporal distribution and source diversity by day
+
+The operator's temporal extraction combines explicit `Failed password` records and syslog-compressed repetition summaries. The original AWK month conversion used `index("JanFeb...Dec", month) / 3`, so the displayed month keys are zero-based after integer formatting: `00` = January and `11` = December. The date labels below are interpreted with that correction. The file's observed Dec-to-Jan boundary is retained; year and timezone remain unknown.
+
+Observed concentration points:
+- Highest explicit-record minute: 74 at Dec 12 04:28; adjacent minutes also show 71 at 04:27 and 73 at 04:29. This is a short high-density burst in the logged records.
+- Other high explicit-record minutes include Dec 10 13:21 (66), Dec 17 02:06 (64), Jan 2 09:28 (58), Jan 2 09:27 (57), and Jan 3 04:40 (56).
+- Highest explicit-record hours include Jan 3 02:00 (2,534), Jan 3 01:00 (2,509), Jan 3 03:00 (2,448), Dec 10 13:00 (2,413), Jan 3 04:00 (2,321), and Dec 12 04:00 (2,165).
+- Daily output shows both explicit records and repetition-summary counts. For example, Jan 4 has 14,822 explicit records and 62,567 represented repetitions across 12,520 summary records; Dec 31 has 2,445 explicit records and 4,596 represented repetitions across 923 summary records. These are counts from this extraction, not unique sessions.
+
+Source diversity by date:
+- Jan 5: 115.238.230.180 appears against 158 distinct usernames with 839 represented failures.
+- Jan 4: 218.4.104.194 appears against 134 usernames with 168 represented failures.
+- Dec 18: 87.120.255.161 appears against 123 usernames with 163 represented failures.
+- Dec 12: 42.159.145.29 appears against 121 usernames with 384 represented failures.
+- Jan 4 and Jan 3: 119.7.221.129 appears against 113 usernames with 439 represented failures on each date in this extraction.
+- Dec 30: 139.219.191.138 appears against 51 usernames with 10,852 represented failures.
+- Dec 10: 183.62.140.253 appears against 51 usernames with 10,852 represented failures.
+
+Interpretation and limitations:
+- Separate explicit-line rate, repetition-summary volume, source attempt volume and distinct-target diversity. They measure different things.
+- The high-density minutes/hours are counts of explicit records only; compressed repetitions are intentionally not distributed into their original event minutes because the summary line does not expose those exact timestamps.
+- Repetition counts are attributed to the timestamp of the syslog summary record. They may represent events suppressed over an interval, so they are not precise event-time assignments and can distort per-minute, per-hour and per-day attribution near interval boundaries.
+- Source/day aggregates likewise inherit the summary record's timestamp. Treat them as log-record-time aggregates, not exact attack-session timelines.
+- The corpus crosses a visible Dec-to-Jan boundary, but without year/timezone the exact elapsed duration and UTC ordering cannot be asserted. Preserve the raw timestamp and add a normalized timestamp only when external context establishes the missing fields.
+- High distinct-username counts are spraying-like/enumeration candidates, not proof of password reuse. No threshold or automatic blocking rule is derived from these observations.
+- The month-key offset is an analysis-script defect, not a parser finding. Future analysis must use an explicit month map (Jan=1 ... Dec=12) and chronological sorting across year rollover.
