@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <limits.h>
+#include <arpa/inet.h>
 
 #define NS_PER_SECOND UINT64_C(1000000000)
 #define WINDOW_NS ((uint64_t)SSH_DETECTION_WINDOW_SECONDS * NS_PER_SECOND)
@@ -57,6 +58,23 @@ expire_observations(uint64_t now_ns)
         degraded_until_ns = 0;
 }
 
+static int
+canonicalize_address(const char *input, char *output, size_t output_size)
+{
+    struct in_addr ipv4;
+    struct in6_addr ipv6;
+
+    if (!input || !output || output_size == 0 ||
+        memchr(input, '\0', SSH_EVENT_IP_MAX) == NULL || input[0] == '\0')
+        return 0;
+
+    if (inet_pton(AF_INET, input, &ipv4) == 1)
+        return inet_ntop(AF_INET, &ipv4, output, output_size) != NULL;
+    if (inet_pton(AF_INET6, input, &ipv6) == 1)
+        return inet_ntop(AF_INET6, &ipv6, output, output_size) != NULL;
+    return 0;
+}
+
 static unsigned long long
 count_source_failures(const char *address)
 {
@@ -82,6 +100,7 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
     unsigned long long previous, current;
     unsigned int weight;
     unsigned int tail;
+    char normalized_address[SSH_EVENT_IP_MAX];
     struct auth_observation *slot;
 
     if (!event)
@@ -99,7 +118,8 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
      * are deliberately not counted as independent authentication attempts.
      */
     if (event->type != SSH_EVENT_FAILED_PASSWORD || !event->has_address ||
-        event->address[0] == '\0')
+        !canonicalize_address(event->address, normalized_address,
+                              sizeof(normalized_address)))
         return;
 
     weight = event->is_repetition_summary ? event->repetition_count : 1U;
@@ -107,7 +127,7 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
         return;
 
     increment_saturated(&detection_stats.auth_failures_observed);
-    previous = count_source_failures(event->address);
+    previous = count_source_failures(normalized_address);
 
     if (count == SSH_DETECTION_CAPACITY) {
         memset(&observations[head], 0, sizeof(observations[head]));
@@ -123,19 +143,19 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
     memset(slot, 0, sizeof(*slot));
     slot->observed_ns = now_ns;
     slot->weight = weight;
-    (void)snprintf(slot->address, sizeof(slot->address), "%s", event->address);
+    (void)snprintf(slot->address, sizeof(slot->address), "%s", normalized_address);
     ++count;
     detection_stats.active_observations = count;
     detection_stats.partial_visibility =
         degraded_until_ns != 0 && now_ns < degraded_until_ns;
 
-    current = count_source_failures(event->address);
+    current = count_source_failures(normalized_address);
     if (previous < SSH_DETECTION_BRUTE_FORCE_THRESHOLD &&
         current >= SSH_DETECTION_BRUTE_FORCE_THRESHOLD) {
         increment_saturated(&detection_stats.brute_force_findings);
         logger_log("SSH_DETECTION",
             "rule=ssh.bruteforce.source address=%s failures=%llu window_seconds=%u threshold=%u confidence=%s evidence=failed_password_records",
-            event->address, current, SSH_DETECTION_WINDOW_SECONDS,
+            normalized_address, current, SSH_DETECTION_WINDOW_SECONDS,
             SSH_DETECTION_BRUTE_FORCE_THRESHOLD,
             detection_stats.partial_visibility ? "reduced" : "moderate");
     }
