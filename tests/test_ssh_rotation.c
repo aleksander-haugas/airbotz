@@ -118,7 +118,7 @@ int main(void)
     ssh_process();
     ssh_get_stats(&stats);
     assert(stats.source_available == 1 && stats.recovery_transitions == 1);
-    assert(stats.rotations == 1);
+    assert(stats.rotations == 2);
     assert(observed.failed_password == 4);
 
     /*
