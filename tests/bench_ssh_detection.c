@@ -103,12 +103,12 @@ make_benchmark_event(struct ssh_event *event,
 
     case BENCH_SOURCE_SPRAY:
         event->type = SSH_EVENT_FAILED_PASSWORD;
-        set_identity(event, 1U, sequence % 128U, sequence);
+        set_identity(event, 1U, sequence % 8192U, sequence);
         break;
 
     case BENCH_DISTRIBUTED_SPRAY:
         event->type = SSH_EVENT_FAILED_PASSWORD;
-        set_identity(event, sequence % 8U, sequence % 8U, sequence);
+        set_identity(event, sequence % 8192U, (sequence * 3U) % 8192U, sequence);
         break;
 
     case BENCH_HIGH_CARDINALITY:
