@@ -254,12 +254,13 @@ handle_ssh_event(const struct ssh_event *event, void *context)
         (void)snprintf(port, sizeof(port), "-");
 
     logger_log("SSH",
-        "type=%s severity=%s phase=%s pid=%s user=%s address=%s port=%s operation=%s cause=%s",
+        "type=%s severity=%s phase=%s pid=%s user=%s address=%s port=%s operation=%s cause=%s repetition_summary=%u repetition_count=%u",
         ssh_event_name(event->type), severity, phase,
         event->has_pid ? event->pid : "-",
         event->has_username ? event->username : "-",
         event->has_address ? event->address : "-",
-        port, operation, cause);
+        port, operation, cause,
+        event->is_repetition_summary, event->repetition_count);
 }
 
 int
