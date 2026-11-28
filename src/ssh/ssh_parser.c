@@ -500,5 +500,5 @@ ssh_parse_record(const char *line, struct ssh_event *event)
 {
     if (!line || !event)
         return -1;
-    return ssh_parse_record_n(line, strlen(line), event);
+    return ssh_parse_record_cstr(line, event);
 }
