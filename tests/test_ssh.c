@@ -211,6 +211,20 @@ int main(void) {
         assert(event.severity == SSH_LOG_SEVERITY_ERROR);
         assert(strcmp(event.address, "203.0.113.46") == 0);
 
+        /* Incidental transport words in unrelated diagnostics are not enough. */
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: error: diagnostic text mentions Connection reset by peer as context",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_SSHD_ERROR);
+        assert(event.transport_operation == SSH_TRANSPORT_OP_UNKNOWN);
+        assert(event.transport_cause == SSH_TRANSPORT_CAUSE_UNKNOWN);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: fatal: unrelated diagnostic mentions Broken pipe in peer text",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_SSHD_FATAL);
+        assert(event.transport_cause == SSH_TRANSPORT_CAUSE_UNKNOWN);
+
         assert(ssh_parse_record(
             "Dec 10 06:55:46 LabSZ sshd[24200]: fatal: Read from socket failed: Connection reset by peer [preauth]",
             &event) == 0);
