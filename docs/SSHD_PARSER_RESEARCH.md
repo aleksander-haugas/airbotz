@@ -369,3 +369,32 @@ Classification and counting corrections:
 
 The corpus origin, generating OS/distribution, OpenSSH version, date coverage, timezone, provenance URL and usage permission remain unknown. Do not label it as FreeBSD/OpenSSH 10.0p2 data without independent evidence. The reported CRLF format and SHA-256 are file-level fingerprints only.
 
+
+
+### 14.7 Temporal coverage, EOF and additional message predicates
+
+Further operator-run inspection of the same local `SSH.log` established:
+- First displayed records: `Dec 10 06:55:46`, hostname `LabSZ`.
+- Last displayed records: `Jan 7 17:22:01`, hostname `LabSZ`.
+- The syslog timestamps omit the year and timezone. The sample therefore spans a visible Dec-to-Jan boundary, but the calendar year(s), timezone and exact elapsed duration cannot be established from these lines alone.
+- `tail -c 4 SSH.log | od -An -tx1` returned bytes `64 3d 30 29` (ASCII `d=0)`). The final record has no trailing LF; given the earlier `file` result of CRLF line terminators, the file has CRLF-terminated records but an unterminated final record.
+- This is a useful reader test requirement: at definitive EOF, a non-empty final record without LF must be handled according to the reader contract; a buffer fragment caused by a non-final read boundary must not be prematurely emitted as a complete record.
+
+Additional independent predicate counts:
+| Predicate | Matching lines |
+|---|---:|
+| Any message beginning with/matching `Failed ` | 198,019 |
+| `error:` | 1,126 |
+| `fatal:` | 961 |
+| `Did not receive identification string` | 838 |
+| `Failed none` | 432 |
+| `Accepted ` | 182 |
+
+These predicates overlap: `Failed none` is included in the broad `Failed ` count. Do not sum the counts as distinct events. The broad error/fatal counts are string matches, not a fully parsed severity taxonomy. No matches were reported by the supplied expressions for `kex_exchange_identification`, `Unable to negotiate`, `no matching`, `MaxStartups`, `banner exchange`, `Connection from`, or `Disconnected from`; absence in this corpus does not mean these OpenSSH message families are unsupported or impossible.
+
+Parser/catalogue implications:
+- Add a distinct authentication-failure subtype for `Failed none`; do not normalize it to `Failed password`.
+- Add `Did not receive identification string from <address>` as a pre-identification connection event, not an authentication failure.
+- Preserve `error:` and `fatal:` severity prefixes independently from parsed causes such as socket reset. The same record may have both a severity and a transport-error attribute.
+- Preserve raw syslog timestamp text and hostname. Do not invent a year or timezone for this corpus.
+- The sample's first/last displayed timestamps are not enough to determine exact coverage, ordering across year rollover, or elapsed time. Record them as observed endpoints only.
