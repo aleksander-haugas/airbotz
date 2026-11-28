@@ -101,8 +101,8 @@ count_source_user_failures(const char *address, const char *username)
 #define SPRAY_HASH_CAPACITY 8192U
 
 struct spray_bucket {
-    unsigned int observation_index;
-    unsigned long long weight;
+    uint16_t observation_index;
+    unsigned int weight;
 };
 
 struct spray_metrics {
@@ -126,10 +126,11 @@ username_hash(const char *username)
 static struct spray_metrics
 get_spray_metrics(const char *address)
 {
-    struct spray_bucket buckets[SPRAY_HASH_CAPACITY] = {{0, 0}};
+    struct spray_bucket buckets[SPRAY_HASH_CAPACITY];
     struct spray_metrics metrics = {0, 0, 0};
     unsigned int i;
 
+    memset(buckets, 0, sizeof(buckets));
     for (i = 0; i < count; ++i) {
         const struct auth_observation *item =
             &observations[(head + i) % SSH_DETECTION_CAPACITY];
@@ -151,18 +152,24 @@ get_spray_metrics(const char *address)
             struct spray_bucket *bucket = &buckets[slot];
 
             if (bucket->observation_index == 0) {
-                bucket->observation_index = i + 1U;
-                bucket->weight = item->weight;
+                bucket->observation_index = (uint16_t)(i + 1U);
+                bucket->weight = item->weight >
+                    SSH_DETECTION_SPRAY_PER_ACCOUNT_MAX ?
+                    SSH_DETECTION_SPRAY_PER_ACCOUNT_MAX + 1U : item->weight;
                 ++metrics.distinct_accounts;
                 break;
             }
             if (strcmp(observations[(head +
                     bucket->observation_index - 1U) %
                     SSH_DETECTION_CAPACITY].username, item->username) == 0) {
-                if (ULLONG_MAX - bucket->weight < item->weight)
-                    bucket->weight = ULLONG_MAX;
-                else
-                    bucket->weight += item->weight;
+                if (bucket->weight <= SSH_DETECTION_SPRAY_PER_ACCOUNT_MAX) {
+                    if (item->weight >
+                        SSH_DETECTION_SPRAY_PER_ACCOUNT_MAX - bucket->weight)
+                        bucket->weight =
+                            SSH_DETECTION_SPRAY_PER_ACCOUNT_MAX + 1U;
+                    else
+                        bucket->weight += item->weight;
+                }
                 break;
             }
             slot = (slot + 1U) & (SPRAY_HASH_CAPACITY - 1U);
