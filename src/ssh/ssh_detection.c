@@ -137,15 +137,13 @@ get_spray_metrics(const char *address)
         unsigned int slot;
         unsigned int probes;
 
-        if (strcmp(item->address, address) != 0)
+        if (strcmp(item->address, address) != 0 ||
+            item->username[0] == '\0')
             continue;
         if (ULLONG_MAX - metrics.total_attempts < item->weight)
             metrics.total_attempts = ULLONG_MAX;
         else
             metrics.total_attempts += item->weight;
-
-        if (item->username[0] == '\0')
-            continue;
 
         slot = username_hash(item->username) & (SPRAY_HASH_CAPACITY - 1U);
         for (probes = 0; probes < SPRAY_HASH_CAPACITY; ++probes) {
