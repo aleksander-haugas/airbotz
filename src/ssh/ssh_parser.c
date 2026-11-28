@@ -186,6 +186,14 @@ extract_user_and_address(struct ssh_event *event, const char *text,
 static int
 classify_transport(struct ssh_event *event, const char *body)
 {
+    /* Preserve protocol direction/lifecycle events even if peer text mentions
+     * a transport-like phrase such as "Connection reset". */
+    if (strncmp(body, "Received disconnect from ", 25) == 0 ||
+        strncmp(body, "Disconnecting:", 14) == 0 ||
+        strncmp(body, "Connection closed", 17) == 0 ||
+        strncmp(body, "Disconnected from", 18) == 0)
+        return 0;
+
     if (strncmp(body, "Read from socket failed:", 24) == 0) {
         event->transport_operation = SSH_TRANSPORT_OP_READ;
     } else if (strncmp(body, "Write failed:", 13) == 0) {
