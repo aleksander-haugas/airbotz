@@ -133,6 +133,15 @@ int main(void) {
         assert(!event.has_disconnect_reason_code);
         assert(!event.has_disconnect_reason_text);
 
+        /* Oversized source-port tokens must not be truncated into a valid port. */
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: Received disconnect from 203.0.113.11 port 00000022: 11: Bye Bye [preauth]",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_RECEIVED_DISCONNECT);
+        assert(!event.has_port);
+        assert(event.has_disconnect_reason_code);
+        assert(event.disconnect_reason_code == 11);
+
         assert(ssh_parse_record(
             "Dec 10 06:55:46 LabSZ sshd[24200]: Disconnecting: Too many authentication failures for root [preauth]",
             &event) == 0);
