@@ -1,6 +1,6 @@
 # SSHD Detection Design — FreeBSD-first
 
-Status: source/account brute force, source password spraying, source-address canonicalization, and bounded distributed brute force (one account across multiple source IPs) are validated on FreeBSD 15.1. Distributed password spraying is implemented and awaiting operator validation.
+Status: source/account brute force, source password spraying, source-address canonicalization, distributed brute force (one account across multiple source IPs), and distributed password spraying are validated on FreeBSD 15.1.
 
 This document defines the safety and data semantics required before AirBotz turns parsed SSHD records into detections. It does not enable PF actions, change the production configuration, or claim that the current parser is a complete OpenSSH grammar.
 
@@ -10,9 +10,9 @@ The current branch has:
 - a bounded, length-aware syslog/SSHD parser with explicit unknown events;
 - normalized event types for authentication, PAM, disconnects, sessions, transport/protocol errors and selected operational messages;
 - a production log tailer with partial-line handling, oversized-record discard, rename rotation and copytruncate recovery;
-- dispatch into the core, which writes normalized SSH event summaries and invokes observe-only source/account brute-force and source password-spray detectors.
+- dispatch into the core, which writes normalized SSH event summaries and invokes four bounded observe-only detectors: source/account brute force, source password spraying, distributed brute force, and distributed password spraying.
 
-The core includes bounded SSH detections for repeated failures against one account from one source, low-rate failures spread across multiple accounts from one source, and repeated failures against one account spread across multiple source IPs. Unknown events are still ignored by the SSH callback. Distributed password spraying across multiple accounts and source IPs, invalid-account enumeration, success-after-failure, risk scoring and richer alert reporting are not implemented. No SSH-triggered PF response exists.
+The core includes bounded SSH detections for repeated failures against one account from one source, low-rate failures spread across multiple accounts from one source, and repeated failures against one account spread across multiple source IPs. Unknown events are still ignored by the SSH callback. Invalid-account enumeration, success-after-failure, risk scoring and richer alert reporting are not implemented. No SSH-triggered PF response exists.
 
 The reader opens the configured log at EOF on daemon startup. It intentionally does not replay historical records. A deleted/missing path after startup is currently retried by the reader, but SSH source health and event-loss telemetry are not exposed as a complete status contract.
 
@@ -163,7 +163,7 @@ Both rules are deliberately bounded and observe-only. They use only normalized `
 - The rule is a heuristic, not proof of coordination: shared NAT, proxy infrastructure, botnets and legitimate distributed clients can produce overlapping patterns. Findings remain observe-only and provisional.
 - Distributed password spraying (multiple accounts attacked across multiple IPs) is a different pattern and is not implemented by this rule.
 
-### 11.4 Distributed password spraying (implementation pending operator validation)
+### 11.4 Distributed password spraying (validated implementation)
 
 - Aggregates explicit failed-password observations across the bounded 300-second monotonic window, using canonical source IPs and parsed usernames.
 - Provisional trigger: at least 8 observations, at least 5 distinct accounts, at least 5 distinct source IPs, no more than 2 observations for any one account, and no more than 4 observations from any one source.
@@ -183,4 +183,4 @@ Both rules are deliberately bounded and observe-only. They use only normalized `
 - Thresholds require tuning against labelled benign and attack datasets. No inference should be drawn from the frequency of messages in a small reference corpus.
 - No PF command, address-manager mutation, service change or automatic block is invoked.
 
-Distributed brute force against one account is implemented and validated on FreeBSD 15.1. Operator validation after the distributed-rule implementation: `make clean`, warning-free production `make`, `make test`, and `sudo make test` all passed; the latter included root-only IPC. The `test_ssh_detection` regression explicitly passed the local/distributed brute-force and source password-spray correlation scenarios, including windows, thresholds, expiry, repetition summaries and capacity telemetry. This validates the tested implementation and scenarios, not threshold suitability for every deployment. Distributed password spraying is implemented and awaiting FreeBSD operator validation; invalid-account enumeration, success-after-failure and risk scoring remain future work.
+Distributed brute force against one account is implemented and validated on FreeBSD 15.1. Operator validation after the distributed-rule implementation: `make clean`, warning-free production `make`, `make test`, and `sudo make test` all passed; the latter included root-only IPC. The `test_ssh_detection` regression explicitly passed the local/distributed brute-force and source password-spray correlation scenarios, including windows, thresholds, expiry, repetition summaries and capacity telemetry. This validates the tested implementation and scenarios, not threshold suitability for every deployment. Distributed password spraying is implemented and validated on FreeBSD 15.1. Operator validation: `make clean`, warning-free production `make`, `make test`, and `sudo make test` passed, including root-only IPC. The regression test explicitly covers the distributed-spray threshold boundary and a single-source negative case. This validates the tested behavior, not threshold suitability across deployments. Invalid-account enumeration, success-after-failure and risk scoring remain future work.
