@@ -172,7 +172,7 @@ Both rules are deliberately bounded and observe-only. They use only normalized `
 - Emits a single observe-only finding on threshold crossing. No PF action is taken.
 - Thresholds are provisional and require labelled benign/attack corpus evaluation before production tuning.
 
-### 11.4 Shared evidence and limits
+### 11.5 Shared evidence and limits
 
 - A syslog repetition summary contributes its explicit number of additional copies, not one plus that number. The summary remains one bounded observation and does not synthesize timestamps. The represented copies have reduced temporal precision.
 - The correlation store is a fixed 4096-entry ring. It expires entries by monotonic time and reports capacity evictions and partial visibility. The pre-event detection state is evaluated after any required eviction, so an evicted observation cannot incorrectly suppress a threshold crossing.
@@ -183,4 +183,4 @@ Both rules are deliberately bounded and observe-only. They use only normalized `
 - Thresholds require tuning against labelled benign and attack datasets. No inference should be drawn from the frequency of messages in a small reference corpus.
 - No PF command, address-manager mutation, service change or automatic block is invoked.
 
-Distributed brute force against one account is implemented and validated on FreeBSD 15.1. Operator validation after the distributed-rule implementation: `make clean`, warning-free production `make`, `make test`, and `sudo make test` all passed; the latter included root-only IPC. The `test_ssh_detection` regression explicitly passed the local/distributed brute-force and source password-spray correlation scenarios, including windows, thresholds, expiry, repetition summaries and capacity telemetry. This validates the tested implementation and scenarios, not threshold suitability for every deployment. Distributed password spraying across multiple accounts and source IPs, invalid-account enumeration, success-after-failure and risk scoring remain future work.
+Distributed brute force against one account is implemented and validated on FreeBSD 15.1. Operator validation after the distributed-rule implementation: `make clean`, warning-free production `make`, `make test`, and `sudo make test` all passed; the latter included root-only IPC. The `test_ssh_detection` regression explicitly passed the local/distributed brute-force and source password-spray correlation scenarios, including windows, thresholds, expiry, repetition summaries and capacity telemetry. This validates the tested implementation and scenarios, not threshold suitability for every deployment. Distributed password spraying is implemented and awaiting FreeBSD operator validation; invalid-account enumeration, success-after-failure and risk scoring remain future work.
