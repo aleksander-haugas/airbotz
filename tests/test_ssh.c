@@ -229,12 +229,18 @@ int main(void) {
             &event) == 0);
         assert(!event.has_port);
 
-        /* Oversized usernames are not silently truncated into another identity. */
+        /* Oversized usernames are never silently truncated into an identity. */
         {
             char long_user[512];
+            char long_session[512];
             const char *prefix =
                 "Dec 10 06:55:46 LabSZ sshd[24200]: Failed password for ";
             const char *suffix = " from 192.0.2.1 port 22 ssh2";
+            const char *open_prefix =
+                "Dec 10 06:55:46 LabSZ sshd[24200]: pam_unix(sshd:session): session opened for user ";
+            const char *close_prefix =
+                "Dec 10 06:55:46 LabSZ sshd[24200]: pam_unix(sshd:session): session closed for user ";
+            const char *session_suffix = " by (uid=0)";
             size_t pos = strlen(prefix);
             memcpy(long_user, prefix, pos);
             memset(long_user + pos, 'u', 200);
@@ -243,11 +249,38 @@ int main(void) {
             assert(ssh_parse_record(long_user, &event) == 0);
             assert(!event.has_username);
             assert(event.has_address);
+
+            pos = strlen(open_prefix);
+            memcpy(long_session, open_prefix, pos);
+            memset(long_session + pos, 's', 200);
+            pos += 200;
+            memcpy(long_session + pos, session_suffix,
+                   strlen(session_suffix) + 1);
+            assert(ssh_parse_record(long_session, &event) == 0);
+            assert(event.type == SSH_EVENT_SESSION_OPENED);
+            assert(!event.has_username);
+
+            pos = strlen(close_prefix);
+            memcpy(long_session, close_prefix, pos);
+            memset(long_session + pos, 's', 200);
+            pos += 200;
+            memcpy(long_session + pos, session_suffix,
+                   strlen(session_suffix) + 1);
+            assert(ssh_parse_record(long_session, &event) == 0);
+            assert(event.type == SSH_EVENT_SESSION_CLOSED);
+            assert(!event.has_username);
         }
 
         /* Reject embedded line breaks and overlong message bodies, not truncate them. */
         assert(ssh_parse_record(
             "Dec 10 06:55:46 LabSZ sshd[24200]: first line\nsecond line",
+            &event) == -1);
+        /* A newline in the envelope must not let token parsing cross records. */
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ\nsshd[24200]: first",
+            &event) == -1);
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46\nLabSZ sshd[24200]: first",
             &event) == -1);
         assert(ssh_parse_record(
             "Dec 10 06:55:46 LabSZ sshd[24200]: first\rline",
