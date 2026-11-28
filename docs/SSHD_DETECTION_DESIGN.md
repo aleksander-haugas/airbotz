@@ -135,3 +135,20 @@ A later response stage must require explicit policy, dry-run preview, allowlists
 - A local root/kernel compromise can tamper with local logs and AirBotz evidence.
 - No parser can classify every message from every OpenSSH build without versioned samples and ongoing regression coverage.
 - Benchmark claims against Fail2ban/SSHGuard require identical labelled datasets and published methodology; do not claim superiority before that work.
+
+
+## 11. Initial implementation — source brute-force rule
+
+The first R6 implementation is deliberately narrow and observe-only:
+
+- Only normalized `SSH_EVENT_FAILED_PASSWORD` records with a valid parsed IPv4/IPv6 source address contribute to the source brute-force rule.
+- PAM failure records, invalid-user diagnostic records, disconnects and transport errors are not counted as separate authentication attempts. This avoids inflating one authentication interaction with adjacent log messages.
+- The initial conservative baseline is 8 failed-password observations from one source within a 300-second monotonic window. These are engineering starting values, not thresholds inferred from the reference samples; later tuning must use labelled benign and attack datasets.
+- A syslog repetition summary contributes its explicit number of additional copies, not one plus that number. The summary remains one bounded observation and does not synthesize timestamps. A finding that relies on summary evidence is lower-confidence.
+- The correlation store is a fixed 4096-entry ring. It expires entries by monotonic time and reports capacity evictions and a partial-visibility flag. A capacity eviction reduces finding confidence because older evidence may have been lost.
+- Source keys are exact parsed IP address strings in this first cut; later normalization may canonicalize alternate textual representations of the same IPv6 address.
+- A finding is emitted once when the source count crosses the threshold, not on every subsequent failure while above threshold.
+- STATUS exposes observed failure-record count, finding count, active ring entries, capacity evictions and partial-visibility state.
+- No PF command, address-manager mutation, service change or automatic block is invoked.
+
+This first rule does not yet detect password spraying, distributed targeting, invalid-account enumeration or success-after-failure. Those require separate state dimensions and evidence semantics and remain subsequent R6 work.
