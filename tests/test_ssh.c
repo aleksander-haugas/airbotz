@@ -214,7 +214,7 @@ int main(void) {
         /* Length-aware parsing must reject binary NULs, not ignore suffix bytes. */
         {
             static const char binary_record[] =
-                "Dec 10 06:55:46 LabSZ sshd[24200]: first\\0hidden";
+                "Dec 10 06:55:46 LabSZ sshd[24200]: first\0hidden";
             static const char valid_record[] =
                 "Dec 10 06:55:46 LabSZ sshd[24200]: first";
             assert(ssh_parse_record_n(binary_record,
