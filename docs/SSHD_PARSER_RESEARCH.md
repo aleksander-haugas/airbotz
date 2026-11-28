@@ -473,3 +473,23 @@ Parser/correlation requirements:
 - Represent unmatched opens/closes and missing lifecycle evidence explicitly; do not silently discard or fabricate counterpart events.
 - A successful authentication without a corresponding session-open record in the available log must remain an authentication success with session state unknown/unobserved, not be upgraded to a confirmed interactive session.
 - The displayed operator output was truncated to 300 lines and selected five accounts, so it is illustrative rather than a complete per-PID census.
+
+## 14.10. Third-corpus failed-password distribution by account and source
+
+The operator's local `SSH.log` analysis combines explicit `Failed password` records with syslog-compressed `message repeated N times` summaries. The summary count is added as represented failures; these are represented log events, not independently verified connections or unique attack sessions.
+
+Account distribution:
+- `root`: 323,827 represented failures from 588 distinct source IPs (about 93.97% of the 344,627 represented failures counted by this extraction).
+- `admin`: 8,073 from 440 source IPs.
+- Other accounts are substantially lower in this corpus (next examples: `test` 543, `oracle` 489, `support` 486).
+
+Source distribution reveals two different patterns:
+- High-volume, single-account sources: e.g. `59.63.188.30` generated 86,294 represented failures against one account; `58.242.83.25` generated 43,147 against one account.
+- Higher username-diversity sources: `115.238.230.180` generated 839 represented failures across 158 distinct usernames; `119.7.221.129` generated 1,650 across 113 usernames; `183.62.140.253` and `139.219.191.138` each generated 10,852 across 51 usernames.
+
+Interpretation:
+- Keep account failure volume, source-IP volume, and distinct usernames per source as separate features.
+- The high-diversity examples are candidates for spraying-like behavior or username enumeration, not proof of password spraying. Standard sshd failure logs do not reveal whether the same password was reused.
+- The high-volume single-account examples are consistent with concentrated brute-force activity, but temporal distribution and session boundaries are still needed.
+- Counts are corpus-specific, extracted from exact `Failed password` message forms and syslog repetition summaries. They are not calibrated detection thresholds and must not be used as universal blocking rules.
+- The source file remains local; no raw log or IP list has been committed as a reference sample.
