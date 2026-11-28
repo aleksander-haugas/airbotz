@@ -366,6 +366,64 @@ int main(void) {
         assert(event.type == SSH_EVENT_UNKNOWN);
         assert(event.message[0] != '\0');
 
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: Bad protocol version identification 'GET / HTTP/1.1' from 203.0.113.8 port 49152",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_BAD_PROTOCOL_VERSION);
+        assert(event.has_protocol_identification);
+        assert(strcmp(event.protocol_identification, "GET / HTTP/1.1") == 0);
+        assert(event.has_address && strcmp(event.address, "203.0.113.8") == 0);
+        assert(event.has_port && event.port == 49152);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: Bad protocol version identification '' from 2001:db8::8 port 22",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_BAD_PROTOCOL_VERSION);
+        assert(event.has_protocol_identification && event.protocol_identification[0] == '\0');
+        assert(event.has_address && strcmp(event.address, "2001:db8::8") == 0);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: Bad protocol version identification 'unterminated from 203.0.113.8 port 22",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_UNKNOWN);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: Bad packet length 1819045217. [preauth]",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_BAD_PACKET_LENGTH);
+        assert(event.has_packet_length && event.packet_length == 1819045217U);
+        assert(event.auth_phase == SSH_AUTH_PHASE_PREAUTH);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: Bad packet length 999999999999999999999999.",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_UNKNOWN && !event.has_packet_length);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: Corrupted MAC on input. [preauth]",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_CORRUPTED_MAC);
+        assert(event.auth_phase == SSH_AUTH_PHASE_PREAUTH);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: Server listening on 0.0.0.0 port 22.",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_SERVER_LISTENING);
+        assert(event.has_address && strcmp(event.address, "0.0.0.0") == 0);
+        assert(event.has_port && event.port == 22);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: Server listening on :: port 902.",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_SERVER_LISTENING);
+        assert(event.has_address && strcmp(event.address, "::") == 0);
+        assert(event.has_port && event.port == 902);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: syslogin_perform_logout: logout() returned an error",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_SYSLOGIN_LOGOUT_ERROR);
+
         assert(ssh_parse_record("not a syslog record", &event) == -1);
 
         /* Strict syslog envelope validation: month, day and clock ranges. */
