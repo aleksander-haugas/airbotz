@@ -1,6 +1,6 @@
 # SSHD Detection Design — FreeBSD-first
 
-Status: initial source brute-force detector and its first FreeBSD validation are complete; source-address canonicalization follow-up is awaiting operator validation. Additional correlation families remain design work.
+Status: initial source/account brute-force detector and source-address canonicalization are validated on FreeBSD 15.1. A separate bounded source password-spray rule is implemented and awaiting operator validation. Distributed targeting and other correlation families remain design work.
 
 This document defines the safety and data semantics required before AirBotz turns parsed SSHD records into detections. It does not enable PF actions, change the production configuration, or claim that the current parser is a complete OpenSSH grammar.
 
@@ -10,9 +10,9 @@ The current branch has:
 - a bounded, length-aware syslog/SSHD parser with explicit unknown events;
 - normalized event types for authentication, PAM, disconnects, sessions, transport/protocol errors and selected operational messages;
 - a production log tailer with partial-line handling, oversized-record discard, rename rotation and copytruncate recovery;
-- dispatch into the core, which writes normalized SSH event summaries and invokes an observe-only source brute-force detector.
+- dispatch into the core, which writes normalized SSH event summaries and invokes observe-only source/account brute-force and source password-spray detectors.
 
-The core now includes one bounded SSH detection rule: source brute force from explicit failed-password records. Unknown events are still ignored by the SSH callback. Password spraying, distributed targeting, invalid-account enumeration, success-after-failure, risk scoring and richer alert reporting are not implemented. No SSH-triggered PF response exists.
+The core includes bounded SSH detections for repeated failures against one account from one source and low-rate failures spread across multiple accounts from one source. Unknown events are still ignored by the SSH callback. Distributed targeting, invalid-account enumeration, success-after-failure, risk scoring and richer alert reporting are not implemented. No SSH-triggered PF response exists.
 
 The reader opens the configured log at EOF on daemon startup. It intentionally does not replay historical records. A deleted/missing path after startup is currently retried by the reader, but SSH source health and event-loss telemetry are not exposed as a complete status contract.
 
@@ -137,18 +137,33 @@ A later response stage must require explicit policy, dry-run preview, allowlists
 - Benchmark claims against Fail2ban/SSHGuard require identical labelled datasets and published methodology; do not claim superiority before that work.
 
 
-## 11. Initial implementation — source brute-force rule
+## 11. Initial implementation — source/account brute force and password spraying
 
-The first R6 implementation is deliberately narrow and observe-only:
+Both rules are deliberately bounded and observe-only. They use only normalized `SSH_EVENT_FAILED_PASSWORD` records with a valid parsed IPv4/IPv6 source address. PAM failures, invalid-user diagnostics, disconnects and transport errors are not counted as separate authentication attempts.
 
-- Only normalized `SSH_EVENT_FAILED_PASSWORD` records with a valid parsed IPv4/IPv6 source address contribute to the source brute-force rule.
-- PAM failure records, invalid-user diagnostic records, disconnects and transport errors are not counted as separate authentication attempts. This avoids inflating one authentication interaction with adjacent log messages.
-- The initial conservative baseline is 8 failed-password observations from one source within a 300-second monotonic window. These are engineering starting values, not thresholds inferred from the reference samples; later tuning must use labelled benign and attack datasets.
-- A syslog repetition summary contributes its explicit number of additional copies, not one plus that number. The summary remains one bounded observation and does not synthesize timestamps. The represented copies have reduced temporal precision because the summary does not carry timestamps for each copy.
-- The correlation store is a fixed 4096-entry ring. It expires entries by monotonic time and reports capacity evictions and a partial-visibility flag. A capacity eviction reduces finding confidence because older evidence may have been lost.
-- Source keys are canonicalized with `inet_pton()` / `inet_ntop()` before correlation, so equivalent IPv4/IPv6 text forms share one key. Invalid or unterminated address fields are rejected from detection. IPv4-mapped IPv6 addresses remain in the IPv6 family and are not merged with native IPv4 addresses.
-- A finding is emitted once when the source count crosses the threshold, not on every subsequent failure while above threshold.
-- STATUS exposes observed failure-record count, finding count, active ring entries, capacity evictions and partial-visibility state.
+### 11.1 Source/account brute force
+
+- Counts failed-password observations from the same canonical source address against the same non-empty parsed username.
+- Initial threshold: 8 observations in a 300-second monotonic window. These are provisional engineering values, not thresholds inferred from reference samples.
+- Emits once when the source/account count crosses the threshold; a later crossing can occur after the old observations expire.
+- Records without a parsed username may contribute to source-level spray totals but cannot trigger this account-specific rule.
+
+### 11.2 Source password spraying
+
+- Counts failures from one canonical source across distinct non-empty usernames in the same 300-second monotonic window.
+- Provisional trigger: at least 8 failed-password observations, at least 5 distinct accounts, and no more than 2 observations against any one account.
+- This is intentionally a separate pattern from repeated attempts against one account. It does not detect distributed spraying across multiple source addresses.
+- A finding is emitted only when all three conditions become true; it is not repeated for every subsequent failure while the condition remains true.
+
+### 11.3 Shared evidence and limits
+
+- A syslog repetition summary contributes its explicit number of additional copies, not one plus that number. The summary remains one bounded observation and does not synthesize timestamps. The represented copies have reduced temporal precision.
+- The correlation store is a fixed 4096-entry ring. It expires entries by monotonic time and reports capacity evictions and partial visibility. The pre-event detection state is evaluated after any required eviction, so an evicted observation cannot incorrectly suppress a threshold crossing.
+- Source keys are canonicalized with `inet_pton()` / `inet_ntop()`. Equivalent IPv4/IPv6 textual forms share a key. Invalid or unterminated address fields are rejected. IPv4-mapped IPv6 addresses remain in the IPv6 family and are not merged with native IPv4 addresses.
+- Per-account spray counts use a fixed-size hash table bounded above the maximum ring occupancy; scratch memory and correlation state are bounded.
+- STATUS exposes failed-password observation count, brute-force findings, password-spray findings, active ring entries, capacity evictions and partial-visibility state.
+- Capacity eviction reduces finding confidence because older evidence may have been lost. The detector never infers an account from adjacent log records.
+- Thresholds require tuning against labelled benign and attack datasets. No inference should be drawn from the frequency of messages in a small reference corpus.
 - No PF command, address-manager mutation, service change or automatic block is invoked.
 
-This first rule does not yet detect password spraying, distributed targeting, invalid-account enumeration or success-after-failure. Those require separate state dimensions and evidence semantics and remain subsequent R6 work.
+Distributed targeting, invalid-account enumeration, success-after-failure, cross-source correlation and risk scoring remain future work.
