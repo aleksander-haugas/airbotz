@@ -363,8 +363,9 @@ int main(void) {
         assert(ssh_parse_record(
             "Dec 10 06:55:46 LabSZ sshd[24200]: Server listening on 0.0.0.0 port 22.",
             &event) == 0);
-        assert(event.type == SSH_EVENT_UNKNOWN);
-        assert(event.message[0] != '\0');
+        assert(event.type == SSH_EVENT_SERVER_LISTENING);
+        assert(event.has_address && strcmp(event.address, "0.0.0.0") == 0);
+        assert(event.has_port && event.port == 22);
 
         assert(ssh_parse_record(
             "Dec 10 06:55:46 LabSZ sshd[24200]: Bad protocol version identification 'GET / HTTP/1.1' from 203.0.113.8 port 49152",
