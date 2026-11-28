@@ -178,6 +178,15 @@ int main(void) {
             "Dec 32 06:55:46 LabSZ sshd[24200]: Failed password for root from 192.0.2.1 port 22 ssh2",
             &event) == -1);
         assert(ssh_parse_record(
+            "Feb 30 06:55:46 LabSZ sshd[24200]: Failed password for root from 192.0.2.1 port 22 ssh2",
+            &event) == -1);
+        assert(ssh_parse_record(
+            "Apr 31 06:55:46 LabSZ sshd[24200]: Failed password for root from 192.0.2.1 port 22 ssh2",
+            &event) == -1);
+        assert(ssh_parse_record(
+            "Feb 29 06:55:46 LabSZ sshd[24200]: Failed password for root from 192.0.2.1 port 22 ssh2",
+            &event) == 0);
+        assert(ssh_parse_record(
             "Dec 10 24:00:00 LabSZ sshd[24200]: Failed password for root from 192.0.2.1 port 22 ssh2",
             &event) == -1);
         assert(ssh_parse_record(
