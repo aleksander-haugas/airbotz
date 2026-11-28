@@ -658,7 +658,8 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
     struct spray_metrics spray_before, spray_after;
     struct distributed_metrics distributed_before, distributed_after;
     struct distributed_spray_metrics distributed_spray_before, distributed_spray_after;
-    struct spray_metrics invalid_enum_before, invalid_enum_after;
+    struct spray_metrics invalid_enum_before = {0, 0, 0};
+    struct spray_metrics invalid_enum_after = {0, 0, 0};
     unsigned int weight;
     unsigned int tail;
     char normalized_address[SSH_EVENT_IP_MAX];
@@ -720,7 +721,9 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
     distributed_before = normalized_username[0] != '\0' ?
         get_distributed_metrics(normalized_username) :
         (struct distributed_metrics){0, 0, 0};
-    invalid_enum_before = get_invalid_user_metrics(normalized_address);
+    /* Invalid-account enumeration state cannot change on a valid-user event. */
+    if (event->invalid_user)
+        invalid_enum_before = get_invalid_user_metrics(normalized_address);
     distributed_spray_before = normalized_username[0] != '\0' ?
         get_distributed_spray_metrics() :
         (struct distributed_spray_metrics){0, 0, 0, 0, 0};
@@ -759,18 +762,20 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
         }
     }
 
-    invalid_enum_after = get_invalid_user_metrics(normalized_address);
-    if (!is_invalid_account_enumeration(&invalid_enum_before) &&
-        is_invalid_account_enumeration(&invalid_enum_after)) {
-        increment_saturated(&detection_stats.invalid_account_enumeration_findings);
-        logger_log("SSH_DETECTION",
-            "rule=ssh.account.enumeration.invalid address=%s failures=%llu distinct_invalid_accounts=%u max_per_account=%u window_seconds=%u attempt_threshold=%u account_threshold=%u per_account_max=%u confidence=%s evidence=failed_password_invalid_user_records",
-            normalized_address, invalid_enum_after.total_attempts,
-            invalid_enum_after.distinct_accounts, invalid_enum_after.maximum_account_attempts,
-            SSH_DETECTION_WINDOW_SECONDS, SSH_DETECTION_INVALID_ENUM_ATTEMPT_THRESHOLD,
-            SSH_DETECTION_INVALID_ENUM_ACCOUNT_THRESHOLD,
-            SSH_DETECTION_INVALID_ENUM_PER_ACCOUNT_MAX,
-            detection_stats.partial_visibility ? "reduced" : "moderate");
+    if (event->invalid_user) {
+        invalid_enum_after = get_invalid_user_metrics(normalized_address);
+        if (!is_invalid_account_enumeration(&invalid_enum_before) &&
+            is_invalid_account_enumeration(&invalid_enum_after)) {
+            increment_saturated(&detection_stats.invalid_account_enumeration_findings);
+            logger_log("SSH_DETECTION",
+                "rule=ssh.account.enumeration.invalid address=%s failures=%llu distinct_invalid_accounts=%u max_per_account=%u window_seconds=%u attempt_threshold=%u account_threshold=%u per_account_max=%u confidence=%s evidence=failed_password_invalid_user_records",
+                normalized_address, invalid_enum_after.total_attempts,
+                invalid_enum_after.distinct_accounts, invalid_enum_after.maximum_account_attempts,
+                SSH_DETECTION_WINDOW_SECONDS, SSH_DETECTION_INVALID_ENUM_ATTEMPT_THRESHOLD,
+                SSH_DETECTION_INVALID_ENUM_ACCOUNT_THRESHOLD,
+                SSH_DETECTION_INVALID_ENUM_PER_ACCOUNT_MAX,
+                detection_stats.partial_visibility ? "reduced" : "moderate");
+        }
     }
 
     distributed_spray_after = normalized_username[0] != '\0' ?
