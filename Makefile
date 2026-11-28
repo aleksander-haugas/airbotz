@@ -23,7 +23,7 @@ tests/test_pf_live: tests/test_pf_live.c src/pf/pf.c src/logger.c
 	$(CC) $(CFLAGS) -o $@ tests/test_pf_live.c src/pf/pf.c src/logger.c
 
 tests/test_ssh_rotation: tests/test_ssh_rotation.c src/ssh/ssh.c src/ssh/ssh_parser.c src/logger.c
-	$(CC) $(CFLAGS) -o $@ tests/test_ssh_rotation.c src/ssh/ssh.c src/ssh/ssh_parser.c src/logger.c
+	$(CC) $(CFLAGS) -DAIRBOTZ_SSH_TESTING -o $@ tests/test_ssh_rotation.c src/ssh/ssh.c src/ssh/ssh_parser.c src/logger.c
 
 tests/test_storage: tests/test_storage.c src/storage.c src/pf/pf.c src/logger.c
 	$(CC) $(CFLAGS) -DAIRBOTZ_STORAGE_TESTING -o $@ tests/test_storage.c src/storage.c src/pf/pf.c src/logger.c
