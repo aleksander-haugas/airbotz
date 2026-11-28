@@ -2,6 +2,7 @@
 #include "logger.h"
 
 #include <string.h>
+#include <stdio.h>
 #include <time.h>
 #include <limits.h>
 
