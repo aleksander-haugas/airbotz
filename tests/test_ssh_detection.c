@@ -112,7 +112,7 @@ main(void)
         char address[SSH_EVENT_IP_MAX];
         (void)snprintf(address, sizeof(address), "192.0.2.%u", (i % 250U) + 1U);
         event = failure(address, "root");
-        ssh_detection_process_at(&event, (uint64_t)(1000 + i) * SECOND);
+        ssh_detection_process_at(&event, 1000 * SECOND + (uint64_t)i);
     }
     ssh_detection_get_stats(&stats);
     assert(stats.active_observations == SSH_DETECTION_CAPACITY);
