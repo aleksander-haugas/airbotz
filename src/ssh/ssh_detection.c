@@ -619,8 +619,8 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
     slot->has_port = event->has_port != 0 && event->port > 0 &&
         event->port <= 65535U;
     slot->port = event->port;
-    if (event->has_pid && event->pid[0] != '\\0' &&
-        memchr(event->pid, '\\0', sizeof(event->pid)) != NULL)
+    if (event->has_pid && event->pid[0] != '\0' &&
+        memchr(event->pid, '\0', sizeof(event->pid)) != NULL)
         (void)snprintf(slot->pid, sizeof(slot->pid), "%s", event->pid);
     (void)snprintf(slot->address, sizeof(slot->address), "%s", normalized_address);
     (void)snprintf(slot->username, sizeof(slot->username), "%s", normalized_username);
