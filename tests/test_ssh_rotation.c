@@ -74,6 +74,7 @@ int main(void)
         "Dec 10 06:55:52 testhost sshd[1007]: Failed password for root from 192.0.2.7 port 22 ssh2\n";
     int fd;
     struct observed_events observed = {0, 0, ""};
+    struct ssh_reader_stats stats;
 
     assert(mkdtemp(dir) != NULL);
     assert(snprintf(log_path, sizeof(log_path), "%s/auth.log", dir) > 0);
@@ -89,10 +90,15 @@ int main(void)
     assert(logger_init(output_path) == 0);
     assert(ssh_init(log_path, capture_event, &observed) == 0);
     assert(observed.failed_password == 0);
+    ssh_get_stats(&stats);
+    assert(stats.source_available == 1 && stats.records_seen == 0);
 
     write_file(log_path, event1, 1);
     ssh_process();
     assert(observed.failed_password == 1);
+    ssh_get_stats(&stats);
+    assert(stats.records_seen == 1 && stats.records_parsed == 1);
+    assert(stats.events_classified == 1 && stats.events_unknown == 0);
     ssh_process();
     assert(observed.failed_password == 1);
 
@@ -106,8 +112,13 @@ int main(void)
     /* A temporarily missing pathname must recover when a new file appears. */
     assert(rename(log_path, missing_path) == 0);
     ssh_process();
+    ssh_get_stats(&stats);
+    assert(stats.source_available == 0 && stats.missing_transitions == 1);
     write_file(log_path, event3, 0);
     ssh_process();
+    ssh_get_stats(&stats);
+    assert(stats.source_available == 1 && stats.recovery_transitions == 1);
+    assert(stats.rotations == 1);
     assert(observed.failed_password == 4);
 
     /*
@@ -162,7 +173,20 @@ int main(void)
         ssh_process();
         assert(observed.failed_password == 10);
         assert(strcmp(observed.last_address, "192.0.2.9") == 0);
+        ssh_get_stats(&stats);
+        assert(stats.records_oversized == 1);
     }
+
+    write_file(log_path,
+        "Dec 10 06:55:56 testhost sshd[1011]: Synthetic unclassified diagnostic\n", 1);
+    ssh_process();
+    ssh_get_stats(&stats);
+    assert(stats.events_unknown == 1);
+
+    write_file(log_path, "not-a-syslog-record\n", 1);
+    ssh_process();
+    ssh_get_stats(&stats);
+    assert(stats.records_malformed == 1);
 
     ssh_shutdown();
     logger_close();
