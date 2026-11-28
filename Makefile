@@ -28,6 +28,12 @@ tests/test_ssh_rotation: tests/test_ssh_rotation.c src/ssh/ssh.c src/ssh/ssh_par
 tests/test_ssh_detection: tests/test_ssh_detection.c src/ssh/ssh_detection.c src/logger.c
 	$(CC) $(CFLAGS) -o $@ tests/test_ssh_detection.c src/ssh/ssh_detection.c src/logger.c
 
+tests/bench_ssh_detection: tests/bench_ssh_detection.c src/ssh/ssh_detection.c src/logger.c
+	$(CC) $(CFLAGS) -o $@ tests/bench_ssh_detection.c src/ssh/ssh_detection.c src/logger.c
+
+bench-ssh-detection: tests/bench_ssh_detection
+	./tests/bench_ssh_detection
+
 tests/test_storage: tests/test_storage.c src/storage.c src/pf/pf.c src/logger.c
 	$(CC) $(CFLAGS) -DAIRBOTZ_STORAGE_TESTING -o $@ tests/test_storage.c src/storage.c src/pf/pf.c src/logger.c
 
@@ -53,7 +59,7 @@ fuzz-ssh: tests/fuzz_ssh_parser
 	./tests/fuzz_ssh_parser -max_len=4096 -max_total_time=60 "$$corpus"
 
 clean:
-	rm -f $(OBJ) airbotz tests/test_ssh tests/test_pf tests/test_pf_live tests/test_ssh_rotation tests/test_ssh_detection tests/test_storage tests/test_address_manager tests/fuzz_ssh_parser
+	rm -f $(OBJ) airbotz tests/test_ssh tests/test_pf tests/test_pf_live tests/test_ssh_rotation tests/test_ssh_detection tests/bench_ssh_detection tests/test_storage tests/test_address_manager tests/fuzz_ssh_parser
 
 test: airbotz tests/test_ssh tests/test_pf tests/test_ssh_rotation tests/test_ssh_detection tests/test_storage tests/test_address_manager tests/test_ipc
 	./tests/test_ssh
