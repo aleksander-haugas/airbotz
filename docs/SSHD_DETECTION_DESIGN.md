@@ -190,6 +190,15 @@ Both rules are deliberately bounded and observe-only. They use only normalized `
 - Strict PID/port matching intentionally trades coverage for lower false-positive risk. It may miss valid sequences where OpenSSH changes process context or a log record omits the source port; those cases remain uncorrelated until a stronger session identifier is available.
 - The threshold is provisional and requires labelled-corpus and deployment-specific evaluation.
 
+### 11.8 Synthetic saturation benchmark (initial harness)
+
+- `make bench-ssh-detection` builds and runs an opt-in benchmark; it is deliberately excluded from `make test` and the production binary.
+- The harness warms the detector with 4096 synthetic failed-password observations, filling the bounded ring, then measures 10000 additional observations with unique TEST-NET 198.18.0.0/15 source addresses and synthetic usernames.
+- The logger writes to `/dev/null` to avoid terminal or disk logging dominating the measurement. The harness reports elapsed time, average nanoseconds per event and events per second.
+- This is a repeatable saturation workload, not a representative traffic mix or a performance guarantee. Record FreeBSD release, CPU model, compiler/build flags and at least three runs; compare median results before/after any optimization. Do not compare results across different hardware as if they were controlled.
+- The current implementation computes several pre-event and post-event metrics by rescanning the active ring and initializing fixed hash scratch tables. The benchmark is intended to quantify this cost before changing detection semantics or data structures.
+- No production log, PF state, network connection or daemon process is used.
+
 ### 11.7 Shared evidence and limits
 
 - A syslog repetition summary contributes its explicit number of additional copies, not one plus that number. The summary remains one bounded observation and does not synthesize timestamps. The represented copies have reduced temporal precision.
