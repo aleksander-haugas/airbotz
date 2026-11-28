@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <time.h>
 #include <limits.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
 
 #define NS_PER_SECOND UINT64_C(1000000000)
