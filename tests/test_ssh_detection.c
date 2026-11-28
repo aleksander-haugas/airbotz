@@ -95,6 +95,25 @@ main(void)
     ssh_detection_process_at(&event, 507 * SECOND);
     assert(count_findings(path) == 2);
 
+    /* Equivalent IPv6 spellings share one canonical source key. */
+    ssh_detection_reset();
+    for (i = 0; i < 7; ++i) {
+        event = failure(i % 2 ? "2001:db8::1" :
+                        "2001:0db8:0:0:0:0:0:1", "root");
+        ssh_detection_process_at(&event, (uint64_t)(800 + i) * SECOND);
+    }
+    assert(count_findings(path) == 2);
+    event = failure("2001:0db8:0:0:0:0:0:1", "root");
+    ssh_detection_process_at(&event, 807 * SECOND);
+    assert(count_findings(path) == 3);
+
+    /* Malformed address text must never become a source key. */
+    ssh_detection_reset();
+    event = failure("not-an-ip-address", "root");
+    ssh_detection_process_at(&event, 850 * SECOND);
+    ssh_detection_get_stats_at(&stats, 850 * SECOND);
+    assert(stats.auth_failures_observed == 0);
+
     /* Other event families and missing source addresses are not attempts. */
     ssh_detection_reset();
     event = failure("192.0.2.50", "root");
