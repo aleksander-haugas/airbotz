@@ -15,6 +15,7 @@
 struct auth_observation {
     uint64_t observed_ns;
     unsigned int weight;
+    unsigned int invalid_user;
     char address[SSH_EVENT_IP_MAX];
     char username[SSH_EVENT_USER_MAX];
 };
@@ -205,6 +206,66 @@ address_hash(const char *address)
         hash *= 16777619U;
     }
     return hash;
+}
+
+
+static struct spray_metrics
+get_invalid_user_metrics(const char *address)
+{
+    struct spray_bucket buckets[SPRAY_HASH_CAPACITY];
+    struct spray_metrics metrics = {0, 0, 0};
+    unsigned int i;
+
+    memset(buckets, 0, sizeof(buckets));
+    for (i = 0; i < count; ++i) {
+        const struct auth_observation *item =
+            &observations[(head + i) % SSH_DETECTION_CAPACITY];
+        unsigned int slot, probes;
+
+        if (!item->invalid_user || strcmp(item->address, address) != 0 ||
+            item->username[0] == '\0')
+            continue;
+        if (ULLONG_MAX - metrics.total_attempts < item->weight)
+            metrics.total_attempts = ULLONG_MAX;
+        else
+            metrics.total_attempts += item->weight;
+
+        slot = username_hash(item->username) & (SPRAY_HASH_CAPACITY - 1U);
+        for (probes = 0; probes < SPRAY_HASH_CAPACITY; ++probes) {
+            struct spray_bucket *bucket = &buckets[slot];
+            if (bucket->observation_index == 0) {
+                bucket->observation_index = (uint16_t)(i + 1U);
+                bucket->weight = item->weight > SSH_DETECTION_INVALID_ENUM_PER_ACCOUNT_MAX ?
+                    SSH_DETECTION_INVALID_ENUM_PER_ACCOUNT_MAX + 1U : item->weight;
+                ++metrics.distinct_accounts;
+                break;
+            }
+            if (strcmp(observations[(head + bucket->observation_index - 1U) %
+                    SSH_DETECTION_CAPACITY].username, item->username) == 0) {
+                if (bucket->weight <= SSH_DETECTION_INVALID_ENUM_PER_ACCOUNT_MAX) {
+                    if (item->weight > SSH_DETECTION_INVALID_ENUM_PER_ACCOUNT_MAX - bucket->weight)
+                        bucket->weight = SSH_DETECTION_INVALID_ENUM_PER_ACCOUNT_MAX + 1U;
+                    else
+                        bucket->weight += item->weight;
+                }
+                break;
+            }
+            slot = (slot + 1U) & (SPRAY_HASH_CAPACITY - 1U);
+        }
+    }
+    for (i = 0; i < SPRAY_HASH_CAPACITY; ++i)
+        if (buckets[i].observation_index != 0 &&
+            buckets[i].weight > metrics.maximum_account_attempts)
+            metrics.maximum_account_attempts = buckets[i].weight;
+    return metrics;
+}
+
+static int
+is_invalid_account_enumeration(const struct spray_metrics *metrics)
+{
+    return metrics->total_attempts >= SSH_DETECTION_INVALID_ENUM_ATTEMPT_THRESHOLD &&
+        metrics->distinct_accounts >= SSH_DETECTION_INVALID_ENUM_ACCOUNT_THRESHOLD &&
+        metrics->maximum_account_attempts <= SSH_DETECTION_INVALID_ENUM_PER_ACCOUNT_MAX;
 }
 
 static struct distributed_metrics
@@ -424,6 +485,7 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
     struct spray_metrics spray_before, spray_after;
     struct distributed_metrics distributed_before, distributed_after;
     struct distributed_spray_metrics distributed_spray_before, distributed_spray_after;
+    struct spray_metrics invalid_enum_before, invalid_enum_after;
     unsigned int weight;
     unsigned int tail;
     char normalized_address[SSH_EVENT_IP_MAX];
@@ -478,6 +540,7 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
     distributed_before = normalized_username[0] != '\0' ?
         get_distributed_metrics(normalized_username) :
         (struct distributed_metrics){0, 0, 0};
+    invalid_enum_before = get_invalid_user_metrics(normalized_address);
     distributed_spray_before = normalized_username[0] != '\0' ?
         get_distributed_spray_metrics() :
         (struct distributed_spray_metrics){0, 0, 0, 0, 0};
@@ -487,6 +550,7 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
     memset(slot, 0, sizeof(*slot));
     slot->observed_ns = now_ns;
     slot->weight = weight;
+    slot->invalid_user = event->invalid_user != 0;
     (void)snprintf(slot->address, sizeof(slot->address), "%s", normalized_address);
     (void)snprintf(slot->username, sizeof(slot->username), "%s", normalized_username);
     ++count;
@@ -507,6 +571,20 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
                 SSH_DETECTION_WINDOW_SECONDS, SSH_DETECTION_BRUTE_FORCE_THRESHOLD,
                 detection_stats.partial_visibility ? "reduced" : "moderate");
         }
+    }
+
+    invalid_enum_after = get_invalid_user_metrics(normalized_address);
+    if (!is_invalid_account_enumeration(&invalid_enum_before) &&
+        is_invalid_account_enumeration(&invalid_enum_after)) {
+        increment_saturated(&detection_stats.invalid_account_enumeration_findings);
+        logger_log("SSH_DETECTION",
+            "rule=ssh.account.enumeration.invalid address=%s failures=%llu distinct_invalid_accounts=%u max_per_account=%llu window_seconds=%u attempt_threshold=%u account_threshold=%u per_account_max=%u confidence=%s evidence=failed_password_invalid_user_records",
+            normalized_address, invalid_enum_after.total_attempts,
+            invalid_enum_after.distinct_accounts, invalid_enum_after.maximum_account_attempts,
+            SSH_DETECTION_WINDOW_SECONDS, SSH_DETECTION_INVALID_ENUM_ATTEMPT_THRESHOLD,
+            SSH_DETECTION_INVALID_ENUM_ACCOUNT_THRESHOLD,
+            SSH_DETECTION_INVALID_ENUM_PER_ACCOUNT_MAX,
+            detection_stats.partial_visibility ? "reduced" : "moderate");
     }
 
     distributed_spray_after = normalized_username[0] != '\0' ?
