@@ -169,8 +169,13 @@ ssh_detection_get_stats(struct ssh_detection_stats *stats)
 {
     struct timespec ts;
 
-    if (!stats || clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
+    if (!stats)
         return;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
+        *stats = detection_stats;
+        stats->active_observations = count;
+        return;
+    }
     ssh_detection_get_stats_at(stats,
         (uint64_t)ts.tv_sec * NS_PER_SECOND + (uint64_t)ts.tv_nsec);
 }
