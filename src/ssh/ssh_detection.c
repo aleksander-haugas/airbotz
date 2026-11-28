@@ -710,19 +710,24 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
             UINT64_MAX : now_ns + WINDOW_NS;
     }
 
-    /* Evaluate the pre-event state after any capacity eviction. */
-    previous = normalized_username[0] != '\0' ?
-        count_source_user_failures(normalized_address, normalized_username) : 0;
-    spray_before = get_spray_metrics(normalized_address);
-    distributed_before = normalized_username[0] != '\0' ?
-        get_distributed_metrics(normalized_username) :
-        (struct distributed_metrics){0, 0, 0};
-    /* Invalid-account enumeration state cannot change on a valid-user event. */
-    if (event->invalid_user)
-        invalid_enum_before = get_invalid_user_metrics(normalized_address);
-    distributed_spray_before = normalized_username[0] != '\0' ?
-        get_distributed_spray_metrics() :
-        (struct distributed_spray_metrics){0, 0, 0, 0, 0};
+    /*
+     * Every current correlation rule requires a parsed username. Keep
+     * username-less failures in the bounded ring for capacity telemetry,
+     * but avoid scanning the ring for metrics they cannot affect.
+     */
+    if (normalized_username[0] != '\0') {
+        /* Evaluate the pre-event state after any capacity eviction. */
+        previous = count_source_user_failures(normalized_address,
+                                               normalized_username);
+        spray_before = get_spray_metrics(normalized_address);
+        distributed_before = get_distributed_metrics(normalized_username);
+        /* Invalid-account enumeration cannot change on a valid-user event. */
+        if (event->invalid_user)
+            invalid_enum_before = get_invalid_user_metrics(normalized_address);
+        distributed_spray_before = get_distributed_spray_metrics();
+    } else {
+        previous = 0;
+    }
 
     tail = (head + count) % SSH_DETECTION_CAPACITY;
     slot = &observations[tail];
@@ -743,8 +748,13 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
     detection_stats.partial_visibility =
         degraded_until_ns != 0 && now_ns < degraded_until_ns;
 
+    /* No detection rule can use an observation without a parsed username. */
+    if (normalized_username[0] == '\0')
+        return;
+
     if (normalized_username[0] != '\0') {
-        current = count_source_user_failures(normalized_address, normalized_username);
+        current = ULLONG_MAX - previous < weight ?
+            ULLONG_MAX : previous + weight;
         if (previous < SSH_DETECTION_BRUTE_FORCE_THRESHOLD &&
             current >= SSH_DETECTION_BRUTE_FORCE_THRESHOLD) {
             increment_saturated(&detection_stats.brute_force_findings);
