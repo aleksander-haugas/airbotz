@@ -45,7 +45,7 @@ fuzz-ssh: tests/fuzz_ssh_parser
 	./tests/fuzz_ssh_parser -max_len=4096 -max_total_time=60
 
 clean:
-	rm -f $(OBJ) airbotz tests/test_ssh tests/test_pf tests/test_pf_live tests/test_ssh_rotation tests/test_storage tests/test_address_manager
+	rm -f $(OBJ) airbotz tests/test_ssh tests/test_pf tests/test_pf_live tests/test_ssh_rotation tests/test_storage tests/test_address_manager tests/fuzz_ssh_parser
 
 test: airbotz tests/test_ssh tests/test_pf tests/test_ssh_rotation tests/test_storage tests/test_address_manager tests/test_ipc
 	./tests/test_ssh
