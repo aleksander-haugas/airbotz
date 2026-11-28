@@ -646,3 +646,15 @@ The operator validated the authentication-phase and transport-classification cha
 A review of the first transport classifier found that substring matching could promote an unrelated severity message to a transport event merely because its text mentioned `Connection reset` or `Broken pipe`. Operation signatures are now anchored at the beginning of the message body (read, write, banner exchange, key exchange and negotiation). When no operation is identified, cause-only classification is allowed only when the message itself begins with a recognized transport-cause phrase. Existing direction/lifecycle guards remain in place, so peer-supplied disconnect text cannot override a received-disconnect event.
 
 New synthetic regression tests assert that incidental `Connection reset by peer` and `Broken pipe` wording in unrelated `error:` / `fatal:` diagnostics remains a generic SSHD error/fatal event with unknown transport fields. Existing read/write, banner, key-exchange, timeout, EOF and disconnect-direction cases remain in the suite. Parser commit: `78cfc41`; test commit: `6bbabb9`. These latest changes have not yet been validated on FreeBSD; rerun clean build, full tests and seeded fuzzing before treating this refinement as validated.
+
+
+### 15.10 FreeBSD validation of transport-classifier false-positive hardening
+
+The operator pulled the changes through commit `775d1fa` and validated the subsequent parser/test commits `78cfc41` and `6bbabb9` on FreeBSD 15.1:
+
+- `make clean` and production `make` completed without compiler warnings.
+- `make test` passed all applicable unprivileged tests; the IPC integration test correctly skipped without root.
+- `sudo make test` passed, including the root-only IPC socket integration test.
+- Seeded `make fuzz-ssh` completed 7,042,600 executions in 61 seconds with `FUZZ_EXIT=0`; the supplied final output contained no crash or sanitizer report.
+
+This validates the newly added false-positive regression cases and the current transport-classifier implementation against the tested corpus. It is not proof of complete OpenSSH message coverage or absence of all parser defects. The operator's `git status --short` showed only expected untracked local sample logs and build artifacts; raw logs remain excluded from Git. The classifier review item is now closed; broader SSHD grammar, schema and corpus coverage remain open.
