@@ -8,8 +8,30 @@
 
 #define NS_PER_SECOND UINT64_C(1000000000)
 #define WARMUP_EVENTS SSH_DETECTION_CAPACITY
-#define EVENTS_PER_SAMPLE 5000U
+#define EVENTS_PER_SAMPLE 2500U
 #define SAMPLE_COUNT 5U
+
+enum benchmark_scenario {
+    BENCH_MIXED_NORMAL = 0,
+    BENCH_SOURCE_BRUTE_FORCE,
+    BENCH_SOURCE_SPRAY,
+    BENCH_DISTRIBUTED_SPRAY,
+    BENCH_HIGH_CARDINALITY,
+    BENCH_SCENARIO_COUNT
+};
+
+struct scenario_info {
+    enum benchmark_scenario id;
+    const char *name;
+};
+
+static const struct scenario_info scenarios[] = {
+    {BENCH_MIXED_NORMAL, "mixed_normal_70pct_accepted_20pct_failed_10pct_pam"},
+    {BENCH_SOURCE_BRUTE_FORCE, "source_account_bruteforce"},
+    {BENCH_SOURCE_SPRAY, "single_source_password_spray"},
+    {BENCH_DISTRIBUTED_SPRAY, "distributed_password_spray"},
+    {BENCH_HIGH_CARDINALITY, "full_ring_unique_source_and_account"}
+};
 
 static uint64_t
 monotonic_ns(void)
@@ -22,21 +44,79 @@ monotonic_ns(void)
 }
 
 static void
-make_failure(struct ssh_event *event, unsigned int sequence)
+make_address(char *output, size_t output_size, unsigned int sequence)
 {
     unsigned int address = sequence % 131072U;
     unsigned int octet2 = 18U + ((address >> 16) & 1U);
     unsigned int octet3 = (address >> 8) & 255U;
     unsigned int octet4 = address & 255U;
 
-    memset(event, 0, sizeof(*event));
-    event->type = SSH_EVENT_FAILED_PASSWORD;
+    (void)snprintf(output, output_size, "198.%u.%u.%u",
+                   octet2, octet3, octet4);
+}
+
+static void
+set_identity(struct ssh_event *event, unsigned int source_id,
+             unsigned int account_id, unsigned int session_id)
+{
+    make_address(event->address, sizeof(event->address), source_id);
     event->has_address = 1;
-    (void)snprintf(event->address, sizeof(event->address),
-                   "198.%u.%u.%u", octet2, octet3, octet4);
     event->has_username = 1;
     (void)snprintf(event->username, sizeof(event->username),
-                   "bench-user-%u", sequence);
+                   "bench-user-%u", account_id);
+    event->has_port = 1;
+    event->port = 40000U + (session_id % 20000U);
+    event->has_pid = 1;
+    (void)snprintf(event->pid, sizeof(event->pid), "%u",
+                   1000U + (session_id % 50000U));
+}
+
+static void
+make_benchmark_event(struct ssh_event *event,
+                     enum benchmark_scenario scenario,
+                     unsigned int sequence)
+{
+    unsigned int source_id = sequence;
+    unsigned int account_id = sequence;
+    unsigned int session_id = sequence;
+
+    memset(event, 0, sizeof(*event));
+
+    switch (scenario) {
+    case BENCH_MIXED_NORMAL:
+        session_id = sequence / 10U;
+        source_id = session_id % 64U;
+        account_id = session_id % 128U;
+        set_identity(event, source_id, account_id, session_id);
+        if ((sequence % 10U) < 2U)
+            event->type = SSH_EVENT_FAILED_PASSWORD;
+        else if ((sequence % 10U) < 9U)
+            event->type = SSH_EVENT_ACCEPTED_PASSWORD;
+        else
+            event->type = SSH_EVENT_PAM_AUTH_FAILURE;
+        break;
+
+    case BENCH_SOURCE_BRUTE_FORCE:
+        event->type = SSH_EVENT_FAILED_PASSWORD;
+        set_identity(event, 1U, 1U, sequence);
+        break;
+
+    case BENCH_SOURCE_SPRAY:
+        event->type = SSH_EVENT_FAILED_PASSWORD;
+        set_identity(event, 1U, sequence % 128U, sequence);
+        break;
+
+    case BENCH_DISTRIBUTED_SPRAY:
+        event->type = SSH_EVENT_FAILED_PASSWORD;
+        set_identity(event, sequence % 8U, sequence % 8U, sequence);
+        break;
+
+    case BENCH_HIGH_CARDINALITY:
+    default:
+        event->type = SSH_EVENT_FAILED_PASSWORD;
+        set_identity(event, source_id, account_id, session_id);
+        break;
+    }
 }
 
 static void
@@ -56,53 +136,37 @@ sort_samples(uint64_t *samples, unsigned int count)
     }
 }
 
-int
-main(void)
+static int
+run_scenario(const struct scenario_info *scenario,
+             struct ssh_event *events)
 {
-    struct ssh_event event;
-    struct ssh_event *events;
     uint64_t samples[SAMPLE_COUNT];
-    uint64_t start, finish, now_ns, sample_time_ns;
+    uint64_t now_ns, sample_time_ns, start, finish;
     uint64_t minimum, maximum, median;
     unsigned int i, j, sequence = 0;
     double events_per_second, spread_percent;
-
-    events = calloc(EVENTS_PER_SAMPLE, sizeof(*events));
-    if (events == NULL) {
-        perror("calloc benchmark events");
-        return 1;
-    }
-
-    if (logger_init("/dev/null") != 0) {
-        perror("logger_init");
-        free(events);
-        return 1;
-    }
 
     ssh_detection_reset();
     now_ns = monotonic_ns();
     if (now_ns == 0) {
         fprintf(stderr, "clock_gettime(CLOCK_MONOTONIC) failed\n");
-        logger_close();
-        free(events);
-        return 1;
+        return -1;
     }
 
     for (i = 0; i < WARMUP_EVENTS; ++i) {
-        make_failure(&event, sequence);
-        ssh_detection_process_at(&event,
+        make_benchmark_event(&events[0], scenario->id, sequence);
+        ssh_detection_process_at(&events[0],
             now_ns + (uint64_t)sequence * 1000000U);
         ++sequence;
     }
 
     for (i = 0; i < SAMPLE_COUNT; ++i) {
         /*
-         * Prepare unique source/account events outside the timed interval.
-         * The measured region therefore focuses on detector processing,
-         * not snprintf() or synthetic event construction.
+         * Prepare event structures and synthetic identity strings outside
+         * the timed interval. The measured region calls only the detector.
          */
         for (j = 0; j < EVENTS_PER_SAMPLE; ++j) {
-            make_failure(&events[j], sequence);
+            make_benchmark_event(&events[j], scenario->id, sequence);
             ++sequence;
         }
         sample_time_ns = now_ns + (uint64_t)sequence * 1000000U;
@@ -110,9 +174,7 @@ main(void)
         start = monotonic_ns();
         if (start == 0) {
             fprintf(stderr, "clock_gettime start failed\n");
-            logger_close();
-            free(events);
-            return 1;
+            return -1;
         }
 
         for (j = 0; j < EVENTS_PER_SAMPLE; ++j) {
@@ -123,15 +185,11 @@ main(void)
         finish = monotonic_ns();
         if (finish <= start) {
             fprintf(stderr, "invalid monotonic benchmark interval\n");
-            logger_close();
-            free(events);
-            return 1;
+            return -1;
         }
         samples[i] = (finish - start) / EVENTS_PER_SAMPLE;
     }
 
-    logger_close();
-    free(events);
     sort_samples(samples, SAMPLE_COUNT);
     minimum = samples[0];
     median = samples[SAMPLE_COUNT / 2U];
@@ -139,7 +197,7 @@ main(void)
     spread_percent = minimum == 0 ? 0.0 :
         ((double)(maximum - minimum) * 100.0) / (double)minimum;
 
-    printf("SSH detection synthetic benchmark\n");
+    printf("scenario=%s\n", scenario->name);
     printf("warmup_events=%u samples=%u events_per_sample=%u total_measured_events=%u active_capacity=%u\n",
            WARMUP_EVENTS, SAMPLE_COUNT, EVENTS_PER_SAMPLE,
            SAMPLE_COUNT * EVENTS_PER_SAMPLE, SSH_DETECTION_CAPACITY);
@@ -154,6 +212,40 @@ main(void)
     printf("min_ns_per_event=%llu max_ns_per_event=%llu spread_percent=%.1f\n",
            (unsigned long long)minimum, (unsigned long long)maximum,
            spread_percent);
-    printf("scenario=full_ring_unique_source_and_account logging=/dev/null event_building=outside_timed_region\n");
+    printf("\n");
+    return 0;
+}
+
+int
+main(void)
+{
+    struct ssh_event *events;
+    unsigned int i;
+
+    events = calloc(EVENTS_PER_SAMPLE, sizeof(*events));
+    if (events == NULL) {
+        perror("calloc benchmark events");
+        return 1;
+    }
+
+    if (logger_init("/dev/null") != 0) {
+        perror("logger_init");
+        free(events);
+        return 1;
+    }
+
+    printf("SSH detection synthetic workload benchmark\n");
+    printf("event_building=outside_timed_region logging=/dev/null\n\n");
+
+    for (i = 0; i < sizeof(scenarios) / sizeof(scenarios[0]); ++i) {
+        if (run_scenario(&scenarios[i], events) != 0) {
+            logger_close();
+            free(events);
+            return 1;
+        }
+    }
+
+    logger_close();
+    free(events);
     return 0;
 }
