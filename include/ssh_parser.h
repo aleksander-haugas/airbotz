@@ -63,5 +63,7 @@ struct ssh_event {
  * The output is always bounded and contains no pointers into the input.
  */
 int ssh_parse_record(const char *line, struct ssh_event *event);
+/* Length-aware entry point: rejects embedded NUL bytes and oversized records. */
+int ssh_parse_record_n(const void *data, size_t length, struct ssh_event *event);
 
 #endif
