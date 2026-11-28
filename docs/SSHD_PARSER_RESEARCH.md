@@ -620,3 +620,17 @@ After the disconnect-reason extraction changes, the operator supplied the final 
 - No crash or sanitizer report appeared in the supplied output excerpt.
 
 This is evidence that the fuzzer continued to exercise message-shaped and malformed byte sequences. The excerpt did not include final coverage/feature/RSS statistics, and it is not a substitute for the new unit tests or a full clean build. The disconnect-reason implementation remains pending explicit confirmation of `make clean && make` and `make test` on FreeBSD. R5 remains open; fuzz success does not prove correctness.
+
+
+### 15.7 Authentication phase and transport operation/cause
+
+The parser now exposes an intentionally conservative authentication-phase field. It sets SSH_AUTH_PHASE_PREAUTH only when the record contains OpenSSH's explicit [preauth] marker. Records without that marker remain SSH_AUTH_PHASE_UNKNOWN; absence of the marker is not evidence that authentication succeeded or that a session is post-authentication. The raw message is retained unchanged.
+
+Transport classification is represented separately from OpenSSH severity and connection direction:
+- Operation: read, write, identification/banner exchange, key exchange, or algorithm negotiation.
+- Cause: connection reset, timeout, broken pipe, or EOF.
+- A recognized transport operation/cause produces SSH_EVENT_TRANSPORT_ERROR; error/fatal remains independently recorded in the severity field.
+- Generic severity-prefixed messages without a recognized transport signature remain SSH_EVENT_SSHD_ERROR or SSH_EVENT_SSHD_FATAL.
+- Client-originated Received disconnect, server-originated Disconnecting, ordinary connection closure and the existing missing-identification event retain their own event types. In particular, peer-supplied reason text containing words such as Connection reset must not rewrite a client disconnect into an internal transport error.
+
+Synthetic TEST-NET tests cover explicit/unknown phase, read/write reset, banner timeout, key-exchange identification, broken pipe, EOF, and a disconnect reason that resembles a transport cause. These changes are committed but await operator validation on FreeBSD 15.1. The current operation/cause catalogue is deliberately limited to observed/common signatures; it is not a complete OpenSSH transport taxonomy. Do not infer successful authentication, attack intent, or session state from phase/transport fields alone.
