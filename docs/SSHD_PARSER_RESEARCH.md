@@ -434,3 +434,42 @@ The operator also grouped `Accepted` records by authentication method, username 
 These are repeated accepted-authentication log records grouped by a textual key, not proven unique TCP connections, concurrent sessions or malicious activity. Repeated records may represent reconnects or repeated logins. Further correlation must use the syslog timestamp, sshd PID, source port, session-open/close records and other available connection context. Do not pair records by adjacency alone.
 
 The corpus therefore adds two important modeling constraints: (1) log severity and security impact are separate dimensions; (2) accepted authentication is an outcome event, while session establishment and subsequent activity are separate evidence. A successful login should not be labeled malicious solely because it repeats or comes from an unfamiliar address.
+
+### 14.9 Authentication-to-session correlation by PID and username
+
+A further operator extraction displayed accepted-password, PAM session-open and PAM session-close records for selected accounts, retaining the original syslog timestamp and sshd PID. The corpus contains directly observed same-PID sequences, for example:
+
+```text
+Dec 10 09:32:20 LabSZ sshd[24680]: Accepted password for fztu from 119.137.62.142 port 49116 ssh2
+Dec 10 09:32:20 LabSZ sshd[24680]: pam_unix(sshd:session): session opened for user fztu by (uid=0)
+Dec 10 09:45:06 LabSZ sshd[24680]: pam_unix(sshd:session): session closed for user fztu
+```
+
+This is a strong local correlation candidate: timestamp order, PID and username agree. It is not a universal guarantee that every accepted authentication produces a PAM session-open record, or that all lifecycle records will be present in a partial log.
+
+For the nine accounts included in the operator's aggregate, the counts were:
+
+| User | Session opened | Session closed |
+|---|---:|---:|
+| curi | 63 | 67 |
+| hxu | 38 | 38 |
+| fztu | 30 | 30 |
+| jmzhu | 25 | 21 |
+| zachary | 7 | 7 |
+| suyuxin | 11 | 11 |
+| yuewang | 4 | 4 |
+| xxchen | 3 | 3 |
+| tzhao | 1 | 1 |
+| **Total** | **182** | **182** |
+
+The global totals balance, but per-user totals do not: curi has four more close records than open records, while jmzhu has four more open records than close records. This is direct evidence that aggregate equality must not be used to infer per-user pairing. Possible explanations include incomplete records, overlapping sessions, log-boundary effects or other lifecycle behavior; this sample alone does not determine which explanation applies.
+
+Parser/correlation requirements:
+
+- Keep authentication success, PAM session open and PAM session close as distinct event types.
+- Retain timestamp, sshd PID, username, source address and source port whenever present.
+- Use PID + username + event ordering as a strong within-process correlation key, while accounting for PID reuse after process exit or daemon restart. PID alone is not a durable session identifier.
+- Do not pair by username alone, by adjacency alone, or by equality of aggregate open/close counts.
+- Represent unmatched opens/closes and missing lifecycle evidence explicitly; do not silently discard or fabricate counterpart events.
+- A successful authentication without a corresponding session-open record in the available log must remain an authentication success with session state unknown/unobserved, not be upgraded to a confirmed interactive session.
+- The displayed operator output was truncated to 300 lines and selected five accounts, so it is illustrative rather than a complete per-PID census.
