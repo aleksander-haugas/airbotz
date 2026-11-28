@@ -163,6 +163,55 @@ int main(void) {
             &event) == 0);
         assert(event.type == SSH_EVENT_SERVER_DISCONNECT);
 
+        /*
+         * syslogd repeat summaries represent N additional copies of the
+         * enclosed message. Their envelope timestamp is the summary time,
+         * not a timestamp for each represented authentication attempt.
+         */
+        assert(ssh_parse_record(
+            "Dec 10 07:13:56 LabSZ sshd[24227]: message repeated 5 times: [ Failed password for root from 5.36.59.76 port 42393 ssh2]",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_FAILED_PASSWORD);
+        assert(event.is_repetition_summary);
+        assert(event.repetition_count == 5);
+        assert(event.has_timestamp);
+        assert(strcmp(event.timestamp, "Dec 10 07:13:56") == 0);
+        assert(strcmp(event.hostname, "LabSZ") == 0);
+        assert(strcmp(event.pid, "24227") == 0);
+        assert(strcmp(event.username, "root") == 0);
+        assert(strcmp(event.address, "5.36.59.76") == 0);
+        assert(event.has_port && event.port == 42393);
+        assert(strcmp(event.message,
+                      "Failed password for root from 5.36.59.76 port 42393 ssh2") == 0);
+
+        assert(ssh_parse_record(
+            "Dec 10 07:13:56 LabSZ sshd[24227]: message repeated 12 times: [ Failed password for invalid user webmaster from 2001:db8::5 port 22 ssh2 [preauth]]",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_FAILED_PASSWORD);
+        assert(event.is_repetition_summary && event.repetition_count == 12);
+        assert(event.invalid_user);
+        assert(event.auth_phase == SSH_AUTH_PHASE_PREAUTH);
+        assert(strcmp(event.address, "2001:db8::5") == 0);
+
+        /* Malformed summary wrappers remain unknown; never guess a count. */
+        assert(ssh_parse_record(
+            "Dec 10 07:13:56 LabSZ sshd[24227]: message repeated 0 times: [ Failed password for root from 192.0.2.1 port 22 ssh2]",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_UNKNOWN);
+        assert(!event.is_repetition_summary && event.repetition_count == 0);
+
+        assert(ssh_parse_record(
+            "Dec 10 07:13:56 LabSZ sshd[24227]: message repeated 42949672960 times: [ Failed password for root from 192.0.2.1 port 22 ssh2]",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_UNKNOWN);
+        assert(!event.is_repetition_summary && event.repetition_count == 0);
+
+        assert(ssh_parse_record(
+            "Dec 10 07:13:56 LabSZ sshd[24227]: message repeated 5 times: Failed password for root from 192.0.2.1 port 22 ssh2",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_UNKNOWN);
+        assert(!event.is_repetition_summary);
+
         assert(ssh_parse_record(
             "Dec 10 06:55:46 LabSZ sshd[24200]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=192.0.2.44",
             &event) == 0);
