@@ -93,10 +93,18 @@ handle_ipc_request(const char *request, char *response, size_t response_size,
                                  &perm_count) == 0)
                 snprintf(perm_state, sizeof(perm_state), "%zu", perm_count);
         }
-        snprintf(response, response_size,
-            "OK running permanent=%zu temporary=%zu pf=%s pf_temp_entries=%s pf_perm_entries=%s\n",
-            manager->permanent_count, manager->temporary_count,
-            pf_state, temp_state, perm_state);
+        {
+            struct ssh_reader_stats ss;
+            ssh_get_stats(&ss);
+            snprintf(response, response_size,
+                "OK running permanent=%zu temporary=%zu pf=%s pf_temp_entries=%s pf_perm_entries=%s ssh_source=%s ssh_seen=%llu ssh_parsed=%llu ssh_classified=%llu ssh_unknown=%llu ssh_malformed=%llu ssh_oversized=%llu ssh_read_errors=%llu ssh_rotations=%llu ssh_missing=%llu ssh_recovered=%llu\n",
+                manager->permanent_count, manager->temporary_count,
+                pf_state, temp_state, perm_state,
+                ss.source_available ? "available" : "missing", ss.records_seen,
+                ss.records_parsed, ss.events_classified, ss.events_unknown,
+                ss.records_malformed, ss.records_oversized, ss.read_errors,
+                ss.rotations, ss.missing_transitions, ss.recovery_transitions);
+        }
         return 0;
     }
     if (count == 1 && strcmp(tokens[0], "LIST") == 0) {
