@@ -128,7 +128,7 @@ make_benchmark_event(struct ssh_event *event,
         set_identity(event, source_id, account_id, session_id);
         /* Exercise high-cardinality source events with no parsed username. */
         event->has_username = 0;
-        event->username[0] = '\\0';
+        event->username[0] = '\0';
         break;
     }
 }
