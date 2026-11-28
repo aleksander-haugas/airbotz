@@ -197,6 +197,8 @@ Both rules are deliberately bounded and observe-only. They use only normalized `
 - The logger writes to `/dev/null` to avoid terminal or disk logging dominating the measurement. The harness reports elapsed time, average nanoseconds per event and events per second.
 - This is a repeatable saturation workload, not a representative traffic mix or a performance guarantee. Record FreeBSD release, CPU model, compiler/build flags and at least three runs; compare median results before/after any optimization. Do not compare results across different hardware as if they were controlled.
 - The current implementation computes several pre-event and post-event metrics by rescanning the active ring and initializing fixed hash scratch tables. The benchmark is intended to quantify this cost before changing detection semantics or data structures.
+- Baseline operator run (FreeBSD 15.1-RELEASE-p7, AMD Ryzen 9 5900HX, Clang 19.1.7): three saturated runs measured 404821, 349810 and 471253 ns/event; median 404821 ns/event (~2470 events/s). These are host-specific synthetic results, not a production capacity claim.
+- Initial optimization now uses generation-tagged reusable scratch tables for source password-spray, invalid-account enumeration and distributed brute-force aggregation. It avoids clearing 8192 buckets on each call and updates maximum counters during insertion/aggregation rather than scanning the entire scratch table afterward. Distributed password-spray still uses its separate compact local scratch table and has not yet been optimized. This code awaits FreeBSD regression and benchmark validation; preserve identical thresholds and findings.
 - No production log, PF state, network connection or daemon process is used.
 
 ### 11.7 Shared evidence and limits
