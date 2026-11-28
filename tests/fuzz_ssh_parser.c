@@ -34,6 +34,12 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
     assert(memchr(event.disconnect_reason, '\0',
                   sizeof(event.disconnect_reason)) != NULL);
 
+    assert(event.is_repetition_summary <= 1U);
+    if (event.is_repetition_summary)
+        assert(event.repetition_count > 0U);
+    else
+        assert(event.repetition_count == 0U);
+
     if (result == 0) {
         assert(event.has_timestamp);
         assert(event.has_pid);
