@@ -252,7 +252,7 @@ static struct spray_metrics
 get_invalid_user_metrics(const char *address)
 {
     uint32_t generation = begin_spray_scratch();
-    struct spray_metrics metrics = {0, 0, 0};
+    struct spray_metrics metrics = {0, 0, 0, 0};
     unsigned int i;
 
     for (i = 0; i < count; ++i) {
@@ -633,8 +633,8 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
     struct spray_metrics spray_before, spray_after;
     struct distributed_metrics distributed_before, distributed_after;
     struct distributed_spray_metrics distributed_spray_before, distributed_spray_after;
-    struct spray_metrics invalid_enum_before = {0, 0, 0};
-    struct spray_metrics invalid_enum_after = {0, 0, 0};
+    struct spray_metrics invalid_enum_before = {0, 0, 0, 0};
+    struct spray_metrics invalid_enum_after = {0, 0, 0, 0};
     unsigned int weight;
     unsigned int tail;
     char normalized_address[SSH_EVENT_IP_MAX];
