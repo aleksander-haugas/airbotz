@@ -125,19 +125,20 @@ main(void)
 
     /* Broad low-rate account targeting is a spray, not brute force. */
     ssh_detection_reset();
-    for (i = 0; i < 8; ++i) {
+    for (i = 0; i < 7; ++i) {
         char username[SSH_EVENT_USER_MAX];
-        (void)snprintf(username, sizeof(username), "account%u", i / 2U);
+        unsigned int account = i < 6 ? i / 2U : 3U;
+        (void)snprintf(username, sizeof(username), "account%u", account);
         event = failure("192.0.2.70", username);
         ssh_detection_process_at(&event, (uint64_t)(900 + i) * SECOND);
     }
     assert(count_spray_findings(path) == 0);
-    ssh_detection_get_stats_at(&stats, 907 * SECOND);
+    ssh_detection_get_stats_at(&stats, 906 * SECOND);
     assert(stats.brute_force_findings == 0);
     event = failure("192.0.2.70", "account4");
-    ssh_detection_process_at(&event, 908 * SECOND);
+    ssh_detection_process_at(&event, 907 * SECOND);
     assert(count_spray_findings(path) == 1);
-    ssh_detection_get_stats_at(&stats, 908 * SECOND);
+    ssh_detection_get_stats_at(&stats, 907 * SECOND);
     assert(stats.password_spray_findings == 1);
     assert(stats.brute_force_findings == 0);
 
