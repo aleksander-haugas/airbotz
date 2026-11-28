@@ -225,13 +225,83 @@ classify_message(struct ssh_event *event, const char *message)
         event->type = SSH_EVENT_SERVER_DISCONNECT;
     } else if (strncmp(body, "Received disconnect from ", 25) == 0) {
         const char *address_end;
+        const char *cursor;
+        const char *port_start;
+        const char *port_end;
+        const char *code_start;
+        const char *code_end;
+        const char *reason_start;
+        const char *reason_end;
+        char port_buffer[8];
+        unsigned int reason_code = 0;
+
         event->type = SSH_EVENT_RECEIVED_DISCONNECT;
         p = body + 25;
-        address_end = strstr(p, ": ");
-        if (address_end &&
-            is_ip_address(p, (size_t)(address_end - p),
+        address_end = p;
+        while (*address_end &&
+               !isspace((unsigned char)*address_end) &&
+               !(address_end[0] == ':' && address_end[1] == ' '))
+            address_end++;
+        if (is_ip_address(p, (size_t)(address_end - p),
                           event->address, sizeof(event->address)))
             event->has_address = 1;
+
+        cursor = address_end;
+        while (*cursor && isspace((unsigned char)*cursor))
+            cursor++;
+        if (strncmp(cursor, "port ", 5) == 0) {
+            port_start = cursor + 5;
+            port_end = port_start;
+            while (*port_end && isdigit((unsigned char)*port_end))
+                port_end++;
+            copy_span(port_buffer, sizeof(port_buffer), port_start,
+                      (size_t)(port_end - port_start));
+            if (parse_port(port_buffer, &event->port))
+                event->has_port = 1;
+            cursor = port_end;
+            while (*cursor && isspace((unsigned char)*cursor))
+                cursor++;
+        }
+
+        if (cursor[0] == ':' && cursor[1] == ' ') {
+            code_start = cursor + 2;
+            code_end = code_start;
+            while (*code_end && isdigit((unsigned char)*code_end))
+                code_end++;
+            if (code_end > code_start && code_end[0] == ':' &&
+                code_end[1] == ' ') {
+                const char *digit;
+                int valid_code = 1;
+                for (digit = code_start; digit < code_end; digit++) {
+                    unsigned int value = (unsigned int)(*digit - '0');
+                    if (reason_code > (255U - value) / 10U) {
+                        valid_code = 0;
+                        break;
+                    }
+                    reason_code = reason_code * 10U + value;
+                }
+                if (valid_code) {
+                    event->disconnect_reason_code = reason_code;
+                    event->has_disconnect_reason_code = 1;
+                    reason_start = code_end + 2;
+                    reason_end = strstr(reason_start, " [preauth]");
+                    if (!reason_end)
+                        reason_end = reason_start + strlen(reason_start);
+                    while (reason_end > reason_start &&
+                           isspace((unsigned char)reason_end[-1]))
+                        reason_end--;
+                    if (reason_end > reason_start &&
+                        (size_t)(reason_end - reason_start) <
+                            sizeof(event->disconnect_reason)) {
+                        copy_span(event->disconnect_reason,
+                                  sizeof(event->disconnect_reason),
+                                  reason_start,
+                                  (size_t)(reason_end - reason_start));
+                        event->has_disconnect_reason_text = 1;
+                    }
+                }
+            }
+        }
     } else if (strstr(body, "pam_unix(sshd:auth): check pass;") != NULL) {
         event->type = SSH_EVENT_PAM_CHECK_PASS;
     } else if (strncmp(body, "PAM ", 4) == 0 &&
