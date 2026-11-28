@@ -20,7 +20,7 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 
     assert(result == 0 || result == -1);
     assert(event.type >= SSH_EVENT_UNKNOWN &&
-           event.type <= SSH_EVENT_TRANSPORT_ERROR);
+           event.type <= SSH_EVENT_SYSLOGIN_LOGOUT_ERROR);
     assert(event.severity >= SSH_LOG_SEVERITY_UNKNOWN &&
            event.severity <= SSH_LOG_SEVERITY_FATAL);
 
@@ -33,6 +33,10 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
     assert(memchr(event.message, '\0', sizeof(event.message)) != NULL);
     assert(memchr(event.disconnect_reason, '\0',
                   sizeof(event.disconnect_reason)) != NULL);
+    assert(memchr(event.protocol_identification, '\0',
+                  sizeof(event.protocol_identification)) != NULL);
+    assert(event.has_protocol_identification <= 1U);
+    assert(event.has_packet_length <= 1U);
 
     assert(event.is_repetition_summary <= 1U);
     if (event.is_repetition_summary)
