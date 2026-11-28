@@ -572,7 +572,7 @@ The parser now exposes `ssh_parse_record_n(const void *data, size_t length, stru
 
 The same review hardened numeric port extraction: decimal accumulation checks the 65535 bound before multiplication/addition, preventing unsigned wraparound on very long digit sequences. Username extraction no longer silently truncates an oversized username into a different-looking identity; the username field remains unavailable while other independently parsed evidence (such as source address) can still be retained. Decimal range parsing also guards the digit-versus-maximum comparison before subtraction.
 
-Synthetic regression tests cover embedded NUL rejection with trailing data, valid non-NUL-terminated byte slices, very long decimal ports and usernames exceeding the fixed field. These changes have been committed but are awaiting operator validation and a repeat fuzz campaign on FreeBSD. Do not treat the first fuzz run as validation of the new length-aware implementation.
+Synthetic regression tests cover embedded NUL rejection with trailing data, valid non-NUL-terminated byte slices, very long decimal ports and usernames exceeding the fixed field. These changes were validated by the operator on FreeBSD 15.1 at commit `4ec5c0e`, including a repeat 60-second length-aware fuzz campaign; results and limitations are recorded in section 15.4. The follow-up seeded corpus is a separate, not-yet-validated change.
 
 
 ### 15.4 Explicit-length parser validation and seeded fuzz corpus
