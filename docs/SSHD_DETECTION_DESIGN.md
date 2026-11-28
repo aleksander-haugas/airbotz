@@ -203,12 +203,19 @@ Both rules are deliberately bounded and observe-only. They use only normalized `
 - A further optimization skips invalid-account enumeration aggregation for failed-password events not marked `invalid_user`, because such events cannot modify that rule's evidence set. Operator validated commit `3cab6d6` on FreeBSD 15.1: clean warning-free build, `make test`, and `sudo make test` including root-only IPC. Five subsequent benchmark runs measured 401791, 412755, 391143, 319533 and 340107 ns/event (median 391143 ns/event, ~2557 events/s). The result is noisier and slower than the prior ten-run median of 345548.5 ns/event; this cross-run comparison does not establish an isolated regression or benefit.
 - A subsequent seven-run batch under controlled idle conditions measured 311142, 313957, 332405, 420651, 417021, 376402 and 353236 ns/event (median 353236 ns/event, ~2831 events/s). The median is ~12.7% below the initial baseline median (404821 ns/event) and ~2.2% above the preceding ten-run median (345548.5 ns/event). Best-to-worst spread remains 35.2%, so the benchmark still has substantial host/run variability. These measurements do not establish an isolated benefit or regression from the invalid-user fast-path optimization; do not make further algorithmic changes based on this evidence alone. No production log, PF state, network connection or daemon process is used.
 
-### 11.8.1 Benchmark harness refinement (pending operator validation)
+### 11.8.1 Benchmark harness refinement (operator-validated)
 
 - The harness now performs five separately timed samples of 5000 events each after the 4096-event warmup, and reports each sample plus median, minimum, maximum and best-to-worst spread. Each invocation measures 25000 events rather than one 10000-event interval.
 - Synthetic event structures and their address/account strings are prepared before each timed sample. The measured interval now focuses on `ssh_detection_process_at()` rather than the two `snprintf()` calls and event initialization in the previous harness.
 - Every sample still supplies unique synthetic TEST-NET source addresses and usernames. The detector remains saturated at its 4096-entry ring capacity; logger output remains `/dev/null`. The benchmark is opt-in and does not run as part of `make test` or production.
-- This refinement changes the measurement method, so its numbers must not be directly compared with earlier harness results until the operator validates the build and collects new repeated runs. No detector algorithm or production behavior changed.
+- Operator validation on FreeBSD 15.1 passed: clean warning-free production build, `make test`, and `sudo make test` including root-only IPC. Three invocations produced per-run medians of 423841, 409573 and 333260 ns/event. Across all 15 samples the median was 390414 ns/event, with a 319881–435266 ns/event range; individual invocation spreads were approximately 31.8–35.5%. The revised timed region excludes event construction, so these numbers are not directly comparable with the original harness. The variability is still too high to attribute small changes to code.
+
+
+### 11.8.2 Distributed password-spray aggregation pass consolidation (pending operator validation)
+
+- `get_distributed_spray_metrics()` now traverses the active observation ring once and updates the account and source scratch hash tables during that same traversal, rather than performing two separate full-ring passes.
+- The account and source hash tables remain independent, fixed-size, generation-tagged structures. Hash keys, weights, caps, threshold predicates, pre-event/post-event comparisons, eviction semantics and finding output are unchanged.
+- This is a bounded loop-fusion change only; it does not change detector policy, production configuration, PF state, logging inputs or daemon behavior. Operator build/tests and refined benchmark are pending.
 
 ### 11.7 Shared evidence and limits
 
