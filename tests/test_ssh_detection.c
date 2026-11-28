@@ -56,6 +56,20 @@ count_distributed_findings(const char *path)
 }
 
 static unsigned int
+count_invalid_enum_findings(const char *path)
+{
+    FILE *file = fopen(path, "r");
+    char line[1024];
+    unsigned int found = 0;
+    assert(file != NULL);
+    while (fgets(line, sizeof(line), file) != NULL)
+        if (strstr(line, "rule=ssh.account.enumeration.invalid"))
+            ++found;
+    fclose(file);
+    return found;
+}
+
+static unsigned int
 count_distributed_spray_findings(const char *path)
 {
     FILE *file = fopen(path, "r");
@@ -247,6 +261,41 @@ main(void)
     ssh_detection_get_stats_at(&stats, 850 * SECOND);
     assert(stats.auth_failures_observed == 0);
 
+    /* Invalid-account enumeration requires several distinct invalid names. */
+    ssh_detection_reset();
+    for (i = 0; i < 8; ++i) {
+        char username[SSH_EVENT_USER_MAX];
+        (void)snprintf(username, sizeof(username), "ghost%u", i < 6 ? i / 2U : i - 3U);
+        event = failure("192.0.2.77", username);
+        event.invalid_user = 1;
+        ssh_detection_process_at(&event, (uint64_t)(580 + i) * SECOND);
+    }
+    assert(count_invalid_enum_findings(path) == 1);
+    ssh_detection_get_stats_at(&stats, 587 * SECOND);
+    assert(stats.invalid_account_enumeration_findings == 1);
+
+    /* Repeated guesses against one invalid name are not enumeration. */
+    ssh_detection_reset();
+    for (i = 0; i < 8; ++i) {
+        event = failure("192.0.2.78", "ghost");
+        event.invalid_user = 1;
+        ssh_detection_process_at(&event, (uint64_t)(590 + i) * SECOND);
+    }
+    assert(count_invalid_enum_findings(path) == 1);
+    ssh_detection_get_stats_at(&stats, 597 * SECOND);
+    assert(stats.invalid_account_enumeration_findings == 0);
+
+    /* Valid-account spray records do not satisfy invalid-account enumeration. */
+    ssh_detection_reset();
+    for (i = 0; i < 8; ++i) {
+        char username[SSH_EVENT_USER_MAX];
+        (void)snprintf(username, sizeof(username), "known%u", i);
+        event = failure("192.0.2.79", username);
+        ssh_detection_process_at(&event, (uint64_t)(600 + i) * SECOND);
+    }
+    ssh_detection_get_stats_at(&stats, 607 * SECOND);
+    assert(stats.invalid_account_enumeration_findings == 0);
+
     /* Other event families and missing source addresses are not attempts. */
     ssh_detection_reset();
     event = failure("192.0.2.50", "root");
@@ -281,6 +330,6 @@ main(void)
 
     logger_close();
     assert(unlink(path) == 0);
-    puts("PASS: SSH local/distributed brute-force and password-spray correlation, windows, thresholds, expiry, summaries and capacity telemetry");
+    puts("PASS: SSH brute-force, password-spray and invalid-account enumeration correlation, windows, thresholds, expiry, summaries and capacity telemetry");
     return 0;
 }
