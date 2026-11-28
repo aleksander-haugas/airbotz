@@ -101,6 +101,46 @@ int main(void) {
         assert(strcmp(event.address, "192.0.2.44") == 0);
 
         assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: pam_unix(sshd:auth): check pass; user unknown",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_PAM_CHECK_PASS);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: PAM 5 more authentication failures; logname= uid=0 euid=0 tty=ssh ruser= rhost=192.0.2.45",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_PAM_FAILURE_SUMMARY);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: PAM service(sshd) ignoring max retries; 6 > 3",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_PAM_MAX_RETRIES);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: reverse mapping checking getaddrinfo for scanner.example [198.51.100.45] failed - POSSIBLE BREAK-IN ATTEMPT!",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_REVERSE_DNS_WARNING);
+        assert(strcmp(event.address, "198.51.100.45") == 0);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: Did not receive identification string from 203.0.113.45",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_IDENTIFICATION_MISSING);
+        assert(strcmp(event.address, "203.0.113.45") == 0);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: error: Received disconnect from 203.0.113.46: 3: Auth fail [preauth]",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_RECEIVED_DISCONNECT);
+        assert(event.severity == SSH_LOG_SEVERITY_ERROR);
+        assert(strcmp(event.address, "203.0.113.46") == 0);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: fatal: Read from socket failed: Connection reset by peer [preauth]",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_SSHD_FATAL);
+        assert(event.severity == SSH_LOG_SEVERITY_FATAL);
+
+        assert(ssh_parse_record(
             "Dec 10 06:55:46 LabSZ sshd[24200]: pam_unix(sshd:session): session opened for user jmzhu by (uid=0)",
             &event) == 0);
         assert(event.type == SSH_EVENT_SESSION_OPENED);
