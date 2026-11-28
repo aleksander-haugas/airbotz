@@ -1,6 +1,6 @@
 # SSHD Detection Design — FreeBSD-first
 
-Status: source/account brute force, source password spraying, source-address canonicalization, and bounded distributed brute force (one account across multiple source IPs) are validated on FreeBSD 15.1. Distributed spraying and other correlation families remain design work.
+Status: source/account brute force, source password spraying, source-address canonicalization, and bounded distributed brute force (one account across multiple source IPs) are validated on FreeBSD 15.1. Distributed password spraying is implemented and awaiting operator validation.
 
 This document defines the safety and data semantics required before AirBotz turns parsed SSHD records into detections. It does not enable PF actions, change the production configuration, or claim that the current parser is a complete OpenSSH grammar.
 
@@ -162,6 +162,15 @@ Both rules are deliberately bounded and observe-only. They use only normalized `
 - Emits once when the combined pattern crosses all conditions. A single source repeatedly attacking one account does not satisfy this rule.
 - The rule is a heuristic, not proof of coordination: shared NAT, proxy infrastructure, botnets and legitimate distributed clients can produce overlapping patterns. Findings remain observe-only and provisional.
 - Distributed password spraying (multiple accounts attacked across multiple IPs) is a different pattern and is not implemented by this rule.
+
+### 11.4 Distributed password spraying (implementation pending operator validation)
+
+- Aggregates explicit failed-password observations across the bounded 300-second monotonic window, using canonical source IPs and parsed usernames.
+- Provisional trigger: at least 8 observations, at least 5 distinct accounts, at least 5 distinct source IPs, no more than 2 observations for any one account, and no more than 4 observations from any one source.
+- The per-account and per-source caps reduce cases dominated by a single target or origin. This remains a heuristic: it does not prove that the sources are coordinated or that a password was reused.
+- Uses the same fixed-size correlation ring and bounded scratch hash table; no unbounded per-account/per-source allocations are introduced. STATUS exposes a separate finding counter.
+- Emits a single observe-only finding on threshold crossing. No PF action is taken.
+- Thresholds are provisional and require labelled benign/attack corpus evaluation before production tuning.
 
 ### 11.4 Shared evidence and limits
 
