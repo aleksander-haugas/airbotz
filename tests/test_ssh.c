@@ -203,7 +203,7 @@ int main(void) {
 
         /* Reject embedded line breaks and overlong message bodies, not truncate them. */
         assert(ssh_parse_record(
-            "Dec 10 06:55:46 LabSZ sshd[24200]: first line\\nsecond line",
+            "Dec 10 06:55:46 LabSZ sshd[24200]: first line\nsecond line",
             &event) == -1);
         {
             char oversized[1200];
@@ -213,7 +213,7 @@ int main(void) {
             memcpy(oversized, prefix, prefix_len);
             memset(oversized + prefix_len, 'A',
                    sizeof(oversized) - prefix_len - 1);
-            oversized[sizeof(oversized) - 1] = '\\0';
+            oversized[sizeof(oversized) - 1] = '\0';
             assert(ssh_parse_record(oversized, &event) == -1);
         }
     }
