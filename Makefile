@@ -41,8 +41,13 @@ FUZZ_CFLAGS?=-O1 -g -Iinclude -D_POSIX_C_SOURCE=200809L -std=c11 -Wall -Wextra -
 tests/fuzz_ssh_parser: tests/fuzz_ssh_parser.c src/ssh/ssh_parser.c include/ssh_parser.h
 	$(FUZZ_CC) $(FUZZ_CFLAGS) -o $@ tests/fuzz_ssh_parser.c src/ssh/ssh_parser.c
 
+# Copy immutable checked-in seeds to a disposable directory so libFuzzer
+# cannot add generated corpus entries to the source tree.
 fuzz-ssh: tests/fuzz_ssh_parser
-	./tests/fuzz_ssh_parser -max_len=4096 -max_total_time=60 tests/fuzz_ssh_corpus
+	@set -eu; corpus=$$(mktemp -d /tmp/airbotz-fuzz.XXXXXX); \
+	trap 'rm -rf "$$corpus"' EXIT; \
+	cp tests/fuzz_ssh_corpus/* "$$corpus"/; \
+	./tests/fuzz_ssh_parser -max_len=4096 -max_total_time=60 "$$corpus"
 
 clean:
 	rm -f $(OBJ) airbotz tests/test_ssh tests/test_pf tests/test_pf_live tests/test_ssh_rotation tests/test_storage tests/test_address_manager tests/fuzz_ssh_parser
@@ -58,10 +63,10 @@ test: airbotz tests/test_ssh tests/test_pf tests/test_ssh_rotation tests/test_st
 test-pf-live: tests/test_pf_live
 	@echo "Run with root privileges: ./tests/test_pf_live"
 
+.PHONY: all clean test test-pf-live fuzz-ssh test_address_manager install
+
 install: airbotz
 	install -d $(DESTDIR)$(PREFIX)/sbin $(DESTDIR)$(PREFIX)/etc/airbotz $(DESTDIR)$(PREFIX)/etc/rc.d
 	install -m 0555 airbotz $(DESTDIR)$(PREFIX)/sbin/airbotz
 	install -m 0640 config/airbotz.conf $(DESTDIR)$(PREFIX)/etc/airbotz/airbotz.conf.sample
 	install -m 0555 rc.d/airbotz $(DESTDIR)$(PREFIX)/etc/rc.d/airbotz
-
-.PHONY: all clean test test-pf-live fuzz-ssh test_address_manager install
