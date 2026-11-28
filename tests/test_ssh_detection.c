@@ -40,6 +40,22 @@ count_spray_findings(const char *path)
 }
 
 static unsigned int
+count_distributed_findings(const char *path)
+{
+    FILE *file = fopen(path, "r");
+    char line[1024];
+    unsigned int found = 0;
+
+    assert(file != NULL);
+    while (fgets(line, sizeof(line), file) != NULL) {
+        if (strstr(line, "rule=ssh.bruteforce.distributed"))
+            ++found;
+    }
+    fclose(file);
+    return found;
+}
+
+static unsigned int
 count_findings(const char *path)
 {
     FILE *file = fopen(path, "r");
@@ -152,6 +168,33 @@ main(void)
     assert(stats.brute_force_findings == 1);
     assert(stats.password_spray_findings == 0);
 
+    /* Distributed brute force: one account, many sources, low rate per source. */
+    ssh_detection_reset();
+    for (i = 0; i < 8; ++i) {
+        char address[SSH_EVENT_IP_MAX];
+        (void)snprintf(address, sizeof(address), "198.51.100.%u",
+                       (i / 2U) + 10U);
+        event = failure(address, "shared-account");
+        ssh_detection_process_at(&event, (uint64_t)(940 + i) * SECOND);
+    }
+    assert(count_distributed_findings(path) == 0);
+    event = failure("198.51.100.15", "shared-account");
+    ssh_detection_process_at(&event, 948 * SECOND);
+    assert(count_distributed_findings(path) == 1);
+    ssh_detection_get_stats_at(&stats, 948 * SECOND);
+    assert(stats.distributed_brute_force_findings == 1);
+    assert(stats.brute_force_findings == 0);
+    assert(stats.password_spray_findings == 0);
+
+    /* A single source repeatedly attacking one account is not distributed. */
+    ssh_detection_reset();
+    for (i = 0; i < 8; ++i) {
+        event = failure("198.51.100.20", "single-source-account");
+        ssh_detection_process_at(&event, (uint64_t)(960 + i) * SECOND);
+    }
+    ssh_detection_get_stats_at(&stats, 967 * SECOND);
+    assert(stats.distributed_brute_force_findings == 0);
+
     /* Malformed address text must never become a source key. */
     ssh_detection_reset();
     event = failure("not-an-ip-address", "root");
@@ -193,6 +236,6 @@ main(void)
 
     logger_close();
     assert(unlink(path) == 0);
-    puts("PASS: SSH brute-force and password-spray correlation, windows, thresholds, expiry, summaries and capacity telemetry");
+    puts("PASS: SSH local/distributed brute-force and password-spray correlation, windows, thresholds, expiry, summaries and capacity telemetry");
     return 0;
 }
