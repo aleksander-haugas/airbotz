@@ -83,31 +83,11 @@ canonicalize_address(const char *input, char *output, size_t output_size)
     return 0;
 }
 
-static unsigned long long
-count_source_user_failures(const char *address, const char *username)
-{
-    unsigned long long total = 0;
-    unsigned int i;
-
-    for (i = 0; i < count; ++i) {
-        const struct auth_observation *item =
-            &observations[(head + i) % SSH_DETECTION_CAPACITY];
-
-        if (strcmp(item->address, address) == 0 &&
-            strcmp(item->username, username) == 0) {
-            if (ULLONG_MAX - total < item->weight)
-                return ULLONG_MAX;
-            total += item->weight;
-        }
-    }
-    return total;
-}
-
 #define SPRAY_HASH_CAPACITY 8192U
 
 struct spray_bucket {
     uint16_t observation_index;
-    uint8_t weight;
+    unsigned long long weight;
     uint32_t generation;
 };
 
@@ -143,6 +123,7 @@ struct spray_metrics {
     unsigned long long total_attempts;
     unsigned int distinct_accounts;
     unsigned long long maximum_account_attempts;
+    unsigned long long target_account_attempts;
 };
 
 static unsigned int
@@ -158,10 +139,10 @@ username_hash(const char *username)
 }
 
 static struct spray_metrics
-get_spray_metrics(const char *address)
+get_spray_metrics(const char *address, const char *target_username)
 {
     uint32_t generation = begin_spray_scratch();
-    struct spray_metrics metrics = {0, 0, 0};
+    struct spray_metrics metrics = {0, 0, 0, 0};
     unsigned int i;
 
     for (i = 0; i < count; ++i) {
@@ -184,27 +165,25 @@ get_spray_metrics(const char *address)
 
             if (bucket->observation_index == 0) {
                 bucket->observation_index = (uint16_t)(i + 1U);
-                bucket->weight = item->weight >
-                    SSH_DETECTION_SPRAY_PER_ACCOUNT_MAX ?
-                    SSH_DETECTION_SPRAY_PER_ACCOUNT_MAX + 1U : item->weight;
+                bucket->weight = item->weight;
                 ++metrics.distinct_accounts;
                 if (bucket->weight > metrics.maximum_account_attempts)
                     metrics.maximum_account_attempts = bucket->weight;
+                if (strcmp(item->username, target_username) == 0)
+                    metrics.target_account_attempts = bucket->weight;
                 break;
             }
             if (strcmp(observations[(head +
                     bucket->observation_index - 1U) %
                     SSH_DETECTION_CAPACITY].username, item->username) == 0) {
-                if (bucket->weight <= SSH_DETECTION_SPRAY_PER_ACCOUNT_MAX) {
-                    if (item->weight >
-                        SSH_DETECTION_SPRAY_PER_ACCOUNT_MAX - bucket->weight)
-                        bucket->weight =
-                            SSH_DETECTION_SPRAY_PER_ACCOUNT_MAX + 1U;
-                    else
-                        bucket->weight += item->weight;
-                }
+                if (ULLONG_MAX - bucket->weight < item->weight)
+                    bucket->weight = ULLONG_MAX;
+                else
+                    bucket->weight += item->weight;
                 if (bucket->weight > metrics.maximum_account_attempts)
                     metrics.maximum_account_attempts = bucket->weight;
+                if (strcmp(item->username, target_username) == 0)
+                    metrics.target_account_attempts = bucket->weight;
                 break;
             }
             slot = (slot + 1U) & (SPRAY_HASH_CAPACITY - 1U);
@@ -717,9 +696,8 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
      */
     if (normalized_username[0] != '\0') {
         /* Evaluate the pre-event state after any capacity eviction. */
-        previous = count_source_user_failures(normalized_address,
-                                               normalized_username);
-        spray_before = get_spray_metrics(normalized_address);
+        spray_before = get_spray_metrics(normalized_address, normalized_username);
+        previous = spray_before.target_account_attempts;
         distributed_before = get_distributed_metrics(normalized_username);
         /* Invalid-account enumeration cannot change on a valid-user event. */
         if (event->invalid_user)
@@ -799,7 +777,7 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
             detection_stats.partial_visibility ? "reduced" : "moderate");
     }
 
-    spray_after = get_spray_metrics(normalized_address);
+    spray_after = get_spray_metrics(normalized_address, normalized_username);
     if (!is_password_spray(&spray_before) && is_password_spray(&spray_after)) {
         increment_saturated(&detection_stats.password_spray_findings);
         logger_log("SSH_DETECTION",
