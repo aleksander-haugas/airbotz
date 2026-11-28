@@ -9,23 +9,14 @@ int
 LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
     struct ssh_event event;
-    char *input;
     int result;
 
     /* Keep fuzz iterations bounded even with an unexpectedly large corpus. */
     if (size > 4096)
         return 0;
 
-    input = malloc(size + 1);
-    if (!input)
-        return 0;
-
-    if (size != 0)
-        memcpy(input, data, size);
-    input[size] = '\0';
-
     memset(&event, 0xa5, sizeof(event));
-    result = ssh_parse_record(input, &event);
+    result = ssh_parse_record_n(data, size, &event);
 
     assert(result == 0 || result == -1);
     assert(event.type >= SSH_EVENT_UNKNOWN &&
@@ -46,6 +37,5 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
         assert(event.has_pid);
     }
 
-    free(input);
     return 0;
 }
