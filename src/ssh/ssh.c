@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <time.h>
+#include <limits.h>
 
 #define SSH_PATH_MAX 512
 #define SSH_TAIL_SIZE 128
@@ -26,21 +27,28 @@ static int dropping_record;
 static struct ssh_reader_stats reader_stats;
 
 static void
+counter_increment(unsigned long long *counter)
+{
+    if (*counter != ULLONG_MAX)
+        ++*counter;
+}
+
+static void
 dispatch_record(const unsigned char *record, size_t length)
 {
     struct ssh_event event;
 
-    reader_stats.records_seen++;
+    counter_increment(&reader_stats.records_seen);
     reader_stats.last_record_time = time(NULL);
     if (ssh_parse_record_n(record, length, &event) != 0) {
-        reader_stats.records_malformed++;
+        counter_increment(&reader_stats.records_malformed);
         return;
     }
-    reader_stats.records_parsed++;
+    counter_increment(&reader_stats.records_parsed);
     if (event.type == SSH_EVENT_UNKNOWN)
-        reader_stats.events_unknown++;
+        counter_increment(&reader_stats.events_unknown);
     else
-        reader_stats.events_classified++;
+        counter_increment(&reader_stats.events_classified);
     if (event_handler)
         event_handler(&event, event_context);
 }
@@ -59,7 +67,7 @@ dispatch_pending_record(void)
         dispatch_record(record_buffer, record_length);
     else if (dropping_record) {
         reader_stats.records_seen++;
-        reader_stats.records_oversized++;
+        counter_increment(&reader_stats.records_oversized);
         reader_stats.last_record_time = time(NULL);
         logger_log("WARN", "SSH log record exceeded parser limit; discarded");
     }
@@ -104,7 +112,7 @@ process_available(void)
     }
 
     if (ferror(logf)) {
-        reader_stats.read_errors++;
+        counter_increment(&reader_stats.read_errors);
         clearerr(logf);
         logger_log("WARN", "SSH log read error");
     }
@@ -186,14 +194,14 @@ refresh_log_file(void)
     if (stat(log_path, &path_stat) != 0) {
         if (reader_stats.source_available) {
             reader_stats.source_available = 0;
-            reader_stats.missing_transitions++;
+            counter_increment(&reader_stats.missing_transitions);
             logger_log("WARN", "SSH log source path is unavailable");
         }
         return;
     }
     if (!reader_stats.source_available) {
         reader_stats.source_available = 1;
-        reader_stats.recovery_transitions++;
+        counter_increment(&reader_stats.recovery_transitions);
         logger_log("INFO", "SSH log source path recovered");
     }
 
@@ -212,7 +220,7 @@ refresh_log_file(void)
         logf = new_log;
         reset_record_buffer();
         tail_length = 0;
-        reader_stats.rotations++;
+        counter_increment(&reader_stats.rotations);
         logger_log("INFO", "SSH log rotated; following new file");
         return;
     }
