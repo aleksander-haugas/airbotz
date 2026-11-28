@@ -21,6 +21,9 @@ typedef void (*ssh_event_handler)(const struct ssh_event *event,
 int ssh_init(const char *path, ssh_event_handler handler, void *context);
 void ssh_process(void);
 void ssh_get_stats(struct ssh_reader_stats *stats);
+#ifdef AIRBOTZ_SSH_TESTING
+void ssh_test_inject_read_error(void);
+#endif
 void ssh_shutdown(void);
 
 #endif
