@@ -16,6 +16,7 @@ struct auth_observation {
     uint64_t observed_ns;
     unsigned int weight;
     char address[SSH_EVENT_IP_MAX];
+    char username[SSH_EVENT_USER_MAX];
 };
 
 static struct auth_observation observations[SSH_DETECTION_CAPACITY];
@@ -78,6 +79,114 @@ canonicalize_address(const char *input, char *output, size_t output_size)
 }
 
 static unsigned long long
+count_source_user_failures(const char *address, const char *username)
+{
+    unsigned long long total = 0;
+    unsigned int i;
+
+    for (i = 0; i < count; ++i) {
+        const struct auth_observation *item =
+            &observations[(head + i) % SSH_DETECTION_CAPACITY];
+
+        if (strcmp(item->address, address) == 0 &&
+            strcmp(item->username, username) == 0) {
+            if (ULLONG_MAX - total < item->weight)
+                return ULLONG_MAX;
+            total += item->weight;
+        }
+    }
+    return total;
+}
+
+#define SPRAY_HASH_CAPACITY 8192U
+
+struct spray_bucket {
+    unsigned int observation_index;
+    unsigned long long weight;
+};
+
+struct spray_metrics {
+    unsigned long long total_attempts;
+    unsigned int distinct_accounts;
+    unsigned long long maximum_account_attempts;
+};
+
+static unsigned int
+username_hash(const char *username)
+{
+    unsigned int hash = 2166136261U;
+
+    while (*username) {
+        hash ^= (unsigned char)*username++;
+        hash *= 16777619U;
+    }
+    return hash;
+}
+
+static struct spray_metrics
+get_spray_metrics(const char *address)
+{
+    struct spray_bucket buckets[SPRAY_HASH_CAPACITY] = {{0, 0}};
+    struct spray_metrics metrics = {0, 0, 0};
+    unsigned int i;
+
+    for (i = 0; i < count; ++i) {
+        const struct auth_observation *item =
+            &observations[(head + i) % SSH_DETECTION_CAPACITY];
+        unsigned int slot;
+        unsigned int probes;
+
+        if (strcmp(item->address, address) != 0)
+            continue;
+        if (ULLONG_MAX - metrics.total_attempts < item->weight)
+            metrics.total_attempts = ULLONG_MAX;
+        else
+            metrics.total_attempts += item->weight;
+
+        if (item->username[0] == '\0')
+            continue;
+
+        slot = username_hash(item->username) & (SPRAY_HASH_CAPACITY - 1U);
+        for (probes = 0; probes < SPRAY_HASH_CAPACITY; ++probes) {
+            struct spray_bucket *bucket = &buckets[slot];
+
+            if (bucket->observation_index == 0) {
+                bucket->observation_index = i + 1U;
+                bucket->weight = item->weight;
+                ++metrics.distinct_accounts;
+                break;
+            }
+            if (strcmp(observations[(head +
+                    bucket->observation_index - 1U) %
+                    SSH_DETECTION_CAPACITY].username, item->username) == 0) {
+                if (ULLONG_MAX - bucket->weight < item->weight)
+                    bucket->weight = ULLONG_MAX;
+                else
+                    bucket->weight += item->weight;
+                break;
+            }
+            slot = (slot + 1U) & (SPRAY_HASH_CAPACITY - 1U);
+        }
+    }
+
+    for (i = 0; i < SPRAY_HASH_CAPACITY; ++i) {
+        if (buckets[i].observation_index != 0 &&
+            buckets[i].weight > metrics.maximum_account_attempts)
+            metrics.maximum_account_attempts = buckets[i].weight;
+    }
+    return metrics;
+}
+
+static int
+is_password_spray(const struct spray_metrics *metrics)
+{
+    return metrics->total_attempts >= SSH_DETECTION_SPRAY_ATTEMPT_THRESHOLD &&
+        metrics->distinct_accounts >= SSH_DETECTION_SPRAY_ACCOUNT_THRESHOLD &&
+        metrics->maximum_account_attempts <=
+            SSH_DETECTION_SPRAY_PER_ACCOUNT_MAX;
+}
+
+static unsigned long long
 count_source_failures(const char *address)
 {
     unsigned long long total = 0;
@@ -100,9 +209,11 @@ void
 ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
 {
     unsigned long long previous, current;
+    struct spray_metrics spray_before, spray_after;
     unsigned int weight;
     unsigned int tail;
     char normalized_address[SSH_EVENT_IP_MAX];
+    char normalized_username[SSH_EVENT_USER_MAX];
     struct auth_observation *slot;
 
     if (!event)
@@ -128,8 +239,16 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
     if (weight == 0)
         return;
 
+    normalized_username[0] = '\0';
+    if (event->has_username && event->username[0] != '\0' &&
+        memchr(event->username, '\0', sizeof(event->username)) != NULL)
+        (void)snprintf(normalized_username, sizeof(normalized_username),
+                       "%s", event->username);
+
     increment_saturated(&detection_stats.auth_failures_observed);
-    previous = count_source_failures(normalized_address);
+    previous = normalized_username[0] != '\0' ?
+        count_source_user_failures(normalized_address, normalized_username) : 0;
+    spray_before = get_spray_metrics(normalized_address);
 
     if (count == SSH_DETECTION_CAPACITY) {
         memset(&observations[head], 0, sizeof(observations[head]));
@@ -146,19 +265,35 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
     slot->observed_ns = now_ns;
     slot->weight = weight;
     (void)snprintf(slot->address, sizeof(slot->address), "%s", normalized_address);
+    (void)snprintf(slot->username, sizeof(slot->username), "%s", normalized_username);
     ++count;
     detection_stats.active_observations = count;
     detection_stats.partial_visibility =
         degraded_until_ns != 0 && now_ns < degraded_until_ns;
 
-    current = count_source_failures(normalized_address);
-    if (previous < SSH_DETECTION_BRUTE_FORCE_THRESHOLD &&
-        current >= SSH_DETECTION_BRUTE_FORCE_THRESHOLD) {
-        increment_saturated(&detection_stats.brute_force_findings);
+    if (normalized_username[0] != '\0') {
+        current = count_source_user_failures(normalized_address, normalized_username);
+        if (previous < SSH_DETECTION_BRUTE_FORCE_THRESHOLD &&
+            current >= SSH_DETECTION_BRUTE_FORCE_THRESHOLD) {
+            increment_saturated(&detection_stats.brute_force_findings);
+            logger_log("SSH_DETECTION",
+                "rule=ssh.bruteforce.source_account address=%s account=%s failures=%llu window_seconds=%u threshold=%u confidence=%s evidence=failed_password_records",
+                normalized_address, normalized_username, current,
+                SSH_DETECTION_WINDOW_SECONDS, SSH_DETECTION_BRUTE_FORCE_THRESHOLD,
+                detection_stats.partial_visibility ? "reduced" : "moderate");
+        }
+    }
+
+    spray_after = get_spray_metrics(normalized_address);
+    if (!is_password_spray(&spray_before) && is_password_spray(&spray_after)) {
+        increment_saturated(&detection_stats.password_spray_findings);
         logger_log("SSH_DETECTION",
-            "rule=ssh.bruteforce.source address=%s failures=%llu window_seconds=%u threshold=%u confidence=%s evidence=failed_password_records",
-            normalized_address, current, SSH_DETECTION_WINDOW_SECONDS,
-            SSH_DETECTION_BRUTE_FORCE_THRESHOLD,
+            "rule=ssh.password_spray.source address=%s failures=%llu distinct_accounts=%u max_per_account=%llu window_seconds=%u attempt_threshold=%u account_threshold=%u per_account_max=%u confidence=%s evidence=failed_password_records",
+            normalized_address, spray_after.total_attempts,
+            spray_after.distinct_accounts, spray_after.maximum_account_attempts,
+            SSH_DETECTION_WINDOW_SECONDS, SSH_DETECTION_SPRAY_ATTEMPT_THRESHOLD,
+            SSH_DETECTION_SPRAY_ACCOUNT_THRESHOLD,
+            SSH_DETECTION_SPRAY_PER_ACCOUNT_MAX,
             detection_stats.partial_visibility ? "reduced" : "moderate");
     }
 }
