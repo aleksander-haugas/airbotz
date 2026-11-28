@@ -23,11 +23,25 @@ enum ssh_event_type {
     SSH_EVENT_SERVER_DISCONNECT,
     SSH_EVENT_CONNECTION_CLOSED,
     SSH_EVENT_SESSION_OPENED,
-    SSH_EVENT_SESSION_CLOSED
+    SSH_EVENT_SESSION_CLOSED,
+    SSH_EVENT_PAM_CHECK_PASS,
+    SSH_EVENT_PAM_FAILURE_SUMMARY,
+    SSH_EVENT_PAM_MAX_RETRIES,
+    SSH_EVENT_REVERSE_DNS_WARNING,
+    SSH_EVENT_IDENTIFICATION_MISSING,
+    SSH_EVENT_SSHD_ERROR,
+    SSH_EVENT_SSHD_FATAL
+};
+
+enum ssh_log_severity {
+    SSH_LOG_SEVERITY_UNKNOWN = 0,
+    SSH_LOG_SEVERITY_ERROR,
+    SSH_LOG_SEVERITY_FATAL
 };
 
 struct ssh_event {
     enum ssh_event_type type;
+    enum ssh_log_severity severity;
     char timestamp[SSH_EVENT_TIME_MAX];
     char hostname[SSH_EVENT_HOST_MAX];
     char pid[SSH_EVENT_PID_MAX];
