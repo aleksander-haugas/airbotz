@@ -102,7 +102,7 @@ count_source_user_failures(const char *address, const char *username)
 
 struct spray_bucket {
     uint16_t observation_index;
-    unsigned int weight;
+    uint8_t weight;
 };
 
 struct spray_metrics {
@@ -186,7 +186,7 @@ get_spray_metrics(const char *address)
 
 struct distributed_bucket {
     uint16_t observation_index;
-    unsigned int weight;
+    uint8_t weight;
 };
 
 struct distributed_metrics {
