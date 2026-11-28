@@ -23,6 +23,53 @@ failure(const char *address, const char *username)
     return event;
 }
 
+static struct ssh_event
+identified_failure(const char *address, const char *username,
+                   const char *pid, unsigned int port)
+{
+    struct ssh_event event = failure(address, username);
+    event.has_pid = 1;
+    (void)snprintf(event.pid, sizeof(event.pid), "%s", pid);
+    event.has_port = 1;
+    event.port = port;
+    return event;
+}
+
+static struct ssh_event
+accepted(const char *address, const char *username,
+         const char *pid, unsigned int port,
+         enum ssh_event_type type)
+{
+    struct ssh_event event;
+
+    memset(&event, 0, sizeof(event));
+    event.type = type;
+    event.has_address = 1;
+    (void)snprintf(event.address, sizeof(event.address), "%s", address);
+    event.has_username = 1;
+    (void)snprintf(event.username, sizeof(event.username), "%s", username);
+    event.has_pid = 1;
+    (void)snprintf(event.pid, sizeof(event.pid), "%s", pid);
+    event.has_port = 1;
+    event.port = port;
+    return event;
+}
+
+static unsigned int
+count_success_after_failure_findings(const char *path)
+{
+    FILE *file = fopen(path, "r");
+    char line[1024];
+    unsigned int found = 0;
+
+    assert(file != NULL);
+    while (fgets(line, sizeof(line), file) != NULL)
+        if (strstr(line, "rule=ssh.authentication.success_after_failures"))
+            ++found;
+    fclose(file);
+    return found;
+}
+
 static unsigned int
 count_spray_findings(const char *path)
 {
@@ -296,6 +343,65 @@ main(void)
     ssh_detection_get_stats_at(&stats, 607 * SECOND);
     assert(stats.invalid_account_enumeration_findings == 0);
 
+    /* A successful authentication after three failures on the exact same
+     * source/port/sshd-PID/account tuple emits one observe-only finding. */
+    ssh_detection_reset();
+    for (i = 0; i < SSH_DETECTION_SUCCESS_AFTER_FAILURE_THRESHOLD; ++i) {
+        event = identified_failure("192.0.2.90", "alice", "4100", 53001);
+        ssh_detection_process_at(&event, (uint64_t)(700 + i) * SECOND);
+    }
+    event = accepted("192.0.2.90", "alice", "4100", 53001,
+                     SSH_EVENT_ACCEPTED_PUBLICKEY);
+    ssh_detection_process_at(&event, 704 * SECOND);
+    ssh_detection_get_stats_at(&stats, 704 * SECOND);
+    assert(stats.success_after_failure_findings == 1);
+    assert(count_success_after_failure_findings(path) == 1);
+
+    /* A second Accepted record for the same connection cannot duplicate it. */
+    event.type = SSH_EVENT_ACCEPTED_PASSWORD;
+    ssh_detection_process_at(&event, 705 * SECOND);
+    assert(count_success_after_failure_findings(path) == 1);
+
+    /* Two failures are below threshold. */
+    ssh_detection_reset();
+    for (i = 0; i < SSH_DETECTION_SUCCESS_AFTER_FAILURE_THRESHOLD - 1U; ++i) {
+        event = identified_failure("192.0.2.91", "alice", "4101", 53002);
+        ssh_detection_process_at(&event, (uint64_t)(710 + i) * SECOND);
+    }
+    event = accepted("192.0.2.91", "alice", "4101", 53002,
+                     SSH_EVENT_ACCEPTED_PASSWORD);
+    ssh_detection_process_at(&event, 713 * SECOND);
+    ssh_detection_get_stats_at(&stats, 713 * SECOND);
+    assert(stats.success_after_failure_findings == 0);
+
+    /* Same IP/account is insufficient when the source port or PID differs. */
+    ssh_detection_reset();
+    for (i = 0; i < SSH_DETECTION_SUCCESS_AFTER_FAILURE_THRESHOLD; ++i) {
+        event = identified_failure("192.0.2.92", "alice", "4102", 53003);
+        ssh_detection_process_at(&event, (uint64_t)(720 + i) * SECOND);
+    }
+    event = accepted("192.0.2.92", "alice", "4102", 53004,
+                     SSH_EVENT_ACCEPTED_PASSWORD);
+    ssh_detection_process_at(&event, 724 * SECOND);
+    event = accepted("192.0.2.92", "alice", "9999", 53003,
+                     SSH_EVENT_ACCEPTED_PASSWORD);
+    ssh_detection_process_at(&event, 725 * SECOND);
+    ssh_detection_get_stats_at(&stats, 725 * SECOND);
+    assert(stats.success_after_failure_findings == 0);
+
+    /* Missing connection evidence must fail closed. */
+    ssh_detection_reset();
+    for (i = 0; i < SSH_DETECTION_SUCCESS_AFTER_FAILURE_THRESHOLD; ++i) {
+        event = identified_failure("192.0.2.93", "alice", "4103", 53005);
+        ssh_detection_process_at(&event, (uint64_t)(730 + i) * SECOND);
+    }
+    event = accepted("192.0.2.93", "alice", "4103", 53005,
+                     SSH_EVENT_ACCEPTED_KEYBOARD_INTERACTIVE);
+    event.has_port = 0;
+    ssh_detection_process_at(&event, 734 * SECOND);
+    ssh_detection_get_stats_at(&stats, 734 * SECOND);
+    assert(stats.success_after_failure_findings == 0);
+
     /* Other event families and missing source addresses are not attempts. */
     ssh_detection_reset();
     event = failure("192.0.2.50", "root");
@@ -330,6 +436,6 @@ main(void)
 
     logger_close();
     assert(unlink(path) == 0);
-    puts("PASS: SSH brute-force, password-spray and invalid-account enumeration correlation, windows, thresholds, expiry, summaries and capacity telemetry");
+    puts("PASS: SSH brute-force, password-spray, invalid-account enumeration and success-after-failure correlation, windows, thresholds, expiry, summaries and capacity telemetry");
     return 0;
 }
