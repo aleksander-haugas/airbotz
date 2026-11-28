@@ -93,7 +93,7 @@ int main(void) {
             "Dec 10 06:55:46 LabSZ sshd[24200]: Server listening on 0.0.0.0 port 22.",
             &event) == 0);
         assert(event.type == SSH_EVENT_UNKNOWN);
-        assert(event.message[0] != '\\0');
+        assert(event.message[0] != '\0');
 
         assert(ssh_parse_record("not a syslog record", &event) == -1);
     }
