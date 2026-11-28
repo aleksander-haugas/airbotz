@@ -33,7 +33,8 @@ test_incomplete_client(const char *path, int send_partial)
     struct sockaddr_un address;
     char response[32];
     ssize_t n;
-    struct timeval timeout = {3, 0};
+    /* The server deadline is 3s; leave margin for scheduling before EOF. */
+    struct timeval timeout = {5, 0};
 
     fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) return -1;
