@@ -57,6 +57,14 @@ int main(void) {
         assert(strcmp(event.address, "192.0.2.10") == 0);
         assert(event.port == 49811 && event.has_port);
         assert(event.invalid_user);
+        assert(event.auth_phase == SSH_AUTH_PHASE_UNKNOWN);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: Failed password for root from 192.0.2.12 port 22 ssh2 [preauth]",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_FAILED_PASSWORD);
+        assert(event.auth_phase == SSH_AUTH_PHASE_PREAUTH);
+        assert(strstr(event.message, "[preauth]") != NULL);
 
         /*
          * Malformed input must not underflow the username length when the
@@ -198,8 +206,51 @@ int main(void) {
         assert(ssh_parse_record(
             "Dec 10 06:55:46 LabSZ sshd[24200]: fatal: Read from socket failed: Connection reset by peer [preauth]",
             &event) == 0);
-        assert(event.type == SSH_EVENT_SSHD_FATAL);
+        assert(event.type == SSH_EVENT_TRANSPORT_ERROR);
         assert(event.severity == SSH_LOG_SEVERITY_FATAL);
+        assert(event.transport_operation == SSH_TRANSPORT_OP_READ);
+        assert(event.transport_cause == SSH_TRANSPORT_CAUSE_CONNECTION_RESET);
+        assert(event.auth_phase == SSH_AUTH_PHASE_PREAUTH);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: fatal: Write failed: Connection reset by peer [preauth]",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_TRANSPORT_ERROR);
+        assert(event.transport_operation == SSH_TRANSPORT_OP_WRITE);
+        assert(event.transport_cause == SSH_TRANSPORT_CAUSE_CONNECTION_RESET);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: error: banner exchange: Connection timed out",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_TRANSPORT_ERROR);
+        assert(event.severity == SSH_LOG_SEVERITY_ERROR);
+        assert(event.transport_operation == SSH_TRANSPORT_OP_IDENTIFICATION);
+        assert(event.transport_cause == SSH_TRANSPORT_CAUSE_TIMEOUT);
+        assert(event.auth_phase == SSH_AUTH_PHASE_UNKNOWN);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: error: kex_exchange_identification: Connection closed by remote host",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_TRANSPORT_ERROR);
+        assert(event.transport_operation == SSH_TRANSPORT_OP_KEY_EXCHANGE);
+        assert(event.transport_cause == SSH_TRANSPORT_CAUSE_UNKNOWN);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: fatal: Write failed: Broken pipe",
+            &event) == 0);
+        assert(event.transport_cause == SSH_TRANSPORT_CAUSE_BROKEN_PIPE);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: fatal: Read from socket failed: unexpected EOF",
+            &event) == 0);
+        assert(event.transport_cause == SSH_TRANSPORT_CAUSE_EOF);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: fatal: Read from socket failed: Connection reset by peer",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_TRANSPORT_ERROR);
+        assert(event.transport_operation == SSH_TRANSPORT_OP_READ);
+        assert(event.auth_phase == SSH_AUTH_PHASE_UNKNOWN);
 
         assert(ssh_parse_record(
             "Dec 10 06:55:46 LabSZ sshd[24200]: pam_unix(sshd:session): session opened for user jmzhu by (uid=0)",
