@@ -13,6 +13,11 @@
 #define SSH_DETECTION_DISTRIBUTED_ATTEMPT_THRESHOLD 8U
 #define SSH_DETECTION_DISTRIBUTED_SOURCE_THRESHOLD 5U
 #define SSH_DETECTION_DISTRIBUTED_PER_SOURCE_MAX 2U
+#define SSH_DETECTION_DISTRIBUTED_SPRAY_ATTEMPT_THRESHOLD 8U
+#define SSH_DETECTION_DISTRIBUTED_SPRAY_ACCOUNT_THRESHOLD 5U
+#define SSH_DETECTION_DISTRIBUTED_SPRAY_SOURCE_THRESHOLD 5U
+#define SSH_DETECTION_DISTRIBUTED_SPRAY_PER_ACCOUNT_MAX 2U
+#define SSH_DETECTION_DISTRIBUTED_SPRAY_PER_SOURCE_MAX 4U
 #define SSH_DETECTION_CAPACITY 4096U
 
 struct ssh_detection_stats {
@@ -20,6 +25,7 @@ struct ssh_detection_stats {
     unsigned long long brute_force_findings;
     unsigned long long password_spray_findings;
     unsigned long long distributed_brute_force_findings;
+    unsigned long long distributed_password_spray_findings;
     unsigned long long capacity_evictions;
     unsigned int active_observations;
     unsigned int partial_visibility;
