@@ -10,6 +10,7 @@
 #define SSH_EVENT_TIME_MAX 32
 #define SSH_EVENT_IP_MAX 46
 #define SSH_EVENT_DISCONNECT_REASON_MAX 128
+#define SSH_EVENT_IDENTIFICATION_MAX 256
 
 enum ssh_auth_phase {
     SSH_AUTH_PHASE_UNKNOWN = 0,
@@ -54,7 +55,12 @@ enum ssh_event_type {
     SSH_EVENT_IDENTIFICATION_MISSING,
     SSH_EVENT_SSHD_ERROR,
     SSH_EVENT_SSHD_FATAL,
-    SSH_EVENT_TRANSPORT_ERROR
+    SSH_EVENT_TRANSPORT_ERROR,
+    SSH_EVENT_BAD_PROTOCOL_VERSION,
+    SSH_EVENT_BAD_PACKET_LENGTH,
+    SSH_EVENT_CORRUPTED_MAC,
+    SSH_EVENT_SERVER_LISTENING,
+    SSH_EVENT_SYSLOGIN_LOGOUT_ERROR
 };
 
 enum ssh_log_severity {
@@ -76,6 +82,10 @@ struct ssh_event {
     char address[SSH_EVENT_IP_MAX];
     char message[SSH_EVENT_MESSAGE_MAX];
     char disconnect_reason[SSH_EVENT_DISCONNECT_REASON_MAX];
+    char protocol_identification[SSH_EVENT_IDENTIFICATION_MAX];
+    unsigned int packet_length;
+    unsigned int has_protocol_identification;
+    unsigned int has_packet_length;
     unsigned int port;
     unsigned int disconnect_reason_code;
     unsigned int has_timestamp;
