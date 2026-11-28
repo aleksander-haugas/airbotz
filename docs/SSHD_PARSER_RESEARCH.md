@@ -522,3 +522,19 @@ Interpretation and limitations:
 - The corpus crosses a visible Dec-to-Jan boundary, but without year/timezone the exact elapsed duration and UTC ordering cannot be asserted. Preserve the raw timestamp and add a normalized timestamp only when external context establishes the missing fields.
 - High distinct-username counts are spraying-like/enumeration candidates, not proof of password reuse. No threshold or automatic blocking rule is derived from these observations.
 - The month-key offset is an analysis-script defect, not a parser finding. Future analysis must use an explicit month map (Jan=1 ... Dec=12) and chronological sorting across year rollover.
+
+
+## 15. Initial parser implementation: expanded event catalogue
+
+The first parser implementation is being extended against the observed third-corpus message families. The current C event taxonomy now distinguishes:
+
+- Authentication outcomes: failed password, failed `none`, accepted password/public-key/keyboard-interactive, invalid user.
+- PAM evidence: authentication failure, `check pass; user unknown`, aggregated `N more authentication failures`, and `PAM service(sshd) ignoring max retries`.
+- Connection lifecycle: client-originated `Received disconnect`, server-originated `Disconnecting:`, connection closed/disconnected, and missing SSH identification string.
+- DNS consistency warning: reverse-mapping failure with a separately extracted IP address. This is a warning/evidence item, not an attack verdict.
+- Session lifecycle: PAM session opened/closed.
+- OpenSSH severity: `error:` and `fatal:` are retained in a separate severity field. A severity-prefixed client disconnect remains a received-disconnect event; a generic fatal record remains an sshd-fatal event. Severity is not itself a maliciousness score.
+
+Synthetic regression cases use documentation-only TEST-NET IPv4/IPv6 addresses. The raw `message` field retains the original severity prefix while the event type is determined from the message body. The taxonomy is an initial vertical slice; reason codes/text, transport operation/cause, pre-authentication phase, protocol negotiation, and strict RFC3164/RFC5424 envelope support remain future work.
+
+The expanded taxonomy and tests are committed but have not yet been validated by the operator on FreeBSD. Do not mark R3/R4 complete until the updated branch passes a clean build and test run, followed by broader malformed-input and fuzz coverage.
