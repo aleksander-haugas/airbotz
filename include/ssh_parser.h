@@ -11,6 +11,28 @@
 #define SSH_EVENT_IP_MAX 46
 #define SSH_EVENT_DISCONNECT_REASON_MAX 128
 
+enum ssh_auth_phase {
+    SSH_AUTH_PHASE_UNKNOWN = 0,
+    SSH_AUTH_PHASE_PREAUTH
+};
+
+enum ssh_transport_operation {
+    SSH_TRANSPORT_OP_UNKNOWN = 0,
+    SSH_TRANSPORT_OP_READ,
+    SSH_TRANSPORT_OP_WRITE,
+    SSH_TRANSPORT_OP_IDENTIFICATION,
+    SSH_TRANSPORT_OP_KEY_EXCHANGE,
+    SSH_TRANSPORT_OP_NEGOTIATION
+};
+
+enum ssh_transport_cause {
+    SSH_TRANSPORT_CAUSE_UNKNOWN = 0,
+    SSH_TRANSPORT_CAUSE_CONNECTION_RESET,
+    SSH_TRANSPORT_CAUSE_TIMEOUT,
+    SSH_TRANSPORT_CAUSE_BROKEN_PIPE,
+    SSH_TRANSPORT_CAUSE_EOF
+};
+
 enum ssh_event_type {
     SSH_EVENT_UNKNOWN = 0,
     SSH_EVENT_FAILED_PASSWORD,
@@ -31,7 +53,8 @@ enum ssh_event_type {
     SSH_EVENT_REVERSE_DNS_WARNING,
     SSH_EVENT_IDENTIFICATION_MISSING,
     SSH_EVENT_SSHD_ERROR,
-    SSH_EVENT_SSHD_FATAL
+    SSH_EVENT_SSHD_FATAL,
+    SSH_EVENT_TRANSPORT_ERROR
 };
 
 enum ssh_log_severity {
@@ -43,6 +66,9 @@ enum ssh_log_severity {
 struct ssh_event {
     enum ssh_event_type type;
     enum ssh_log_severity severity;
+    enum ssh_auth_phase auth_phase;
+    enum ssh_transport_operation transport_operation;
+    enum ssh_transport_cause transport_cause;
     char timestamp[SSH_EVENT_TIME_MAX];
     char hostname[SSH_EVENT_HOST_MAX];
     char pid[SSH_EVENT_PID_MAX];
