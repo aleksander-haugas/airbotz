@@ -248,7 +248,7 @@ classify_message(struct ssh_event *event, const char *message)
 int
 ssh_parse_record(const char *line, struct ssh_event *event)
 {
-    const char *cursor, *field;
+    const char *cursor, *field, *month_start;
     size_t length;
     char process[64];
     char message[SSH_EVENT_MESSAGE_MAX];
@@ -264,6 +264,7 @@ ssh_parse_record(const char *line, struct ssh_event *event)
     cursor = line;
     if (!next_field(&cursor, &field, &length))
         return -1;
+    month_start = field;
     if (length != 3)
         return -1;
     {
@@ -286,7 +287,7 @@ ssh_parse_record(const char *line, struct ssh_event *event)
             time_start[2] != ':' || time_start[5] != ':')
             return -1;
         if (snprintf(timestamp, sizeof(timestamp), "%.*s %.*s %.*s",
-                     (int)3, line, (int)day_len, day_start,
+                     (int)3, month_start, (int)day_len, day_start,
                      (int)time_len, time_start) < 0)
             return -1;
         copy_span(event->timestamp, sizeof(event->timestamp),
@@ -301,6 +302,7 @@ ssh_parse_record(const char *line, struct ssh_event *event)
     colon = strchr(process, ':');
     if (!colon)
         return -1;
+    message_start = field + (colon - process) + 1;
     * (char *)colon = '\0';
     if (strncmp(process, "sshd[", 5) != 0 &&
         strncmp(process, "sshd-session[", 13) != 0)
@@ -315,10 +317,6 @@ ssh_parse_record(const char *line, struct ssh_event *event)
         }
     }
 
-    message_start = strchr(cursor, ':');
-    if (!message_start)
-        return -1;
-    message_start++;
     while (*message_start && isspace((unsigned char)*message_start))
         message_start++;
     end = message_start + strlen(message_start);
