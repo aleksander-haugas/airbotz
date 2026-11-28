@@ -301,6 +301,49 @@ unwrap_repetition_summary(const char *message, char *original,
     return 1;
 }
 
+static int
+extract_endpoint(struct ssh_event *event, const char *text)
+{
+    const char *p = text, *end;
+    char portbuf[8];
+    while (*p && isspace((unsigned char)*p)) p++;
+    end = p;
+    while (*end && !isspace((unsigned char)*end)) end++;
+    if (end > p && end[-1] == '.') end--;
+    if (is_ip_address(p, (size_t)(end - p), event->address,
+                      sizeof(event->address))) event->has_address = 1;
+    while (*end && isspace((unsigned char)*end)) end++;
+    if (strncmp(end, "port ", 5) == 0) {
+        const char *start = end + 5, *finish = start;
+        while (isdigit((unsigned char)*finish)) finish++;
+        if (finish > start && (size_t)(finish - start) < sizeof(portbuf)) {
+            copy_span(portbuf, sizeof(portbuf), start, (size_t)(finish - start));
+            if (parse_port(portbuf, &event->port)) event->has_port = 1;
+        }
+    }
+    return event->has_address;
+}
+
+static int
+parse_packet_length(const char *body, unsigned int *value)
+{
+    static const char prefix[] = "Bad packet length ";
+    const char *p;
+    unsigned long n = 0;
+    if (strncmp(body, prefix, sizeof(prefix) - 1) != 0) return 0;
+    p = body + sizeof(prefix) - 1;
+    if (!isdigit((unsigned char)*p)) return 0;
+    while (isdigit((unsigned char)*p)) {
+        unsigned int digit = (unsigned int)(*p - '0');
+        if (n > (4294967295UL - digit) / 10UL) return 0;
+        n = n * 10UL + digit;
+        p++;
+    }
+    if (n == 0 || (*p != '.' && !isspace((unsigned char)*p))) return 0;
+    *value = (unsigned int)n;
+    return 1;
+}
+
 static void
 classify_message(struct ssh_event *event, const char *message)
 {
@@ -326,6 +369,49 @@ classify_message(struct ssh_event *event, const char *message)
 
     if (classify_transport(event, body))
         return;
+
+    if (strncmp(body, "Bad protocol version identification ",
+                sizeof("Bad protocol version identification ") - 1) == 0) {
+        const char *quoted = body + sizeof("Bad protocol version identification ") - 1;
+        const char *close;
+        event->type = SSH_EVENT_BAD_PROTOCOL_VERSION;
+        if (*quoted != '\'') { event->type = SSH_EVENT_UNKNOWN; return; }
+        close = strrchr(quoted + 1, '\'');
+        if (!close) { event->type = SSH_EVENT_UNKNOWN; return; }
+        {
+            size_t n = (size_t)(close - (quoted + 1));
+            if (n < sizeof(event->protocol_identification)) {
+                copy_span(event->protocol_identification,
+                          sizeof(event->protocol_identification), quoted + 1, n);
+                event->has_protocol_identification = 1;
+            }
+        }
+        if (strncmp(close + 1, " from ", 6) == 0)
+            (void)extract_endpoint(event, close + 7);
+        return;
+    }
+    if (strncmp(body, "Bad packet length ", 18) == 0) {
+        if (parse_packet_length(body, &event->packet_length)) {
+            event->type = SSH_EVENT_BAD_PACKET_LENGTH;
+            event->has_packet_length = 1;
+        }
+        return;
+    }
+    if (strcmp(body, "Corrupted MAC on input. [preauth]") == 0 ||
+        strcmp(body, "Corrupted MAC on input.") == 0) {
+        event->type = SSH_EVENT_CORRUPTED_MAC;
+        return;
+    }
+    if (strncmp(body, "Server listening on ",
+                sizeof("Server listening on ") - 1) == 0) {
+        event->type = SSH_EVENT_SERVER_LISTENING;
+        (void)extract_endpoint(event, body + sizeof("Server listening on ") - 1);
+        return;
+    }
+    if (strcmp(body, "syslogin_perform_logout: logout() returned an error") == 0) {
+        event->type = SSH_EVENT_SYSLOGIN_LOGOUT_ERROR;
+        return;
+    }
 
     if (strncmp(body, "Failed password for ", 20) == 0) {
         event->type = SSH_EVENT_FAILED_PASSWORD;
