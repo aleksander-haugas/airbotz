@@ -535,7 +535,7 @@ The first parser implementation is being extended against the observed third-cor
 - Session lifecycle: PAM session opened/closed.
 - OpenSSH severity: `error:` and `fatal:` are retained in a separate severity field. A severity-prefixed client disconnect remains a received-disconnect event; a generic fatal record remains an sshd-fatal event. Severity is not itself a maliciousness score.
 
-Synthetic regression cases use documentation-only TEST-NET IPv4/IPv6 addresses. The raw `message` field retains the original severity prefix while the event type is determined from the message body. The taxonomy is an initial vertical slice; reason codes/text, transport operation/cause, pre-authentication phase, protocol negotiation, and strict RFC3164/RFC5424 envelope support remain future work.
+Synthetic regression cases use documentation-only TEST-NET IPv4/IPv6 addresses. The raw `message` field retains the original severity prefix while the event type is determined from the message body. The taxonomy is an initial vertical slice; transport operation/cause, pre-authentication phase, protocol negotiation, and strict RFC3164/RFC5424 envelope support remain future work. Structured peer disconnect reason-code/text extraction is now implemented in a follow-up change and awaits FreeBSD validation.
 
 The expanded taxonomy and tests are committed but have not yet been validated by the operator on FreeBSD. Do not mark R3/R4 complete until the updated branch passes a clean build and test run, followed by broader malformed-input and fuzz coverage.
 
@@ -596,3 +596,17 @@ The operator subsequently ran the seeded campaign on FreeBSD 15.1 after the pars
 The first fuzz target version had pointed libFuzzer directly at the tracked seed directory and produced 1,083 untracked mutations alongside the 20 checked-in seeds. The operator removed only untracked files with `git clean -fd -- tests/fuzz_ssh_corpus`, then verified exactly 20 files, zero untracked files and no Git changes. The target was hardened to copy immutable seeds into a disposable `mktemp` directory and remove that directory on exit, so future fuzz runs do not mutate the source corpus.
 
 The 20 seed files remain synthetic and use documentation-only TEST-NET IPv4/IPv6 addresses; no raw user log data or observed source IP inventory is committed. R5 remains open for broader message-shape coverage, additional negative/false-positive cases and longer fuzz campaigns. A successful fuzz run is useful robustness evidence, not proof of correctness or security.
+
+
+### 15.5 SSH disconnect reason codes and peer-supplied text
+
+The parser now extends `SSH_EVENT_RECEIVED_DISCONNECT` with independently bounded fields for:
+- source address (IPv4 or IPv6);
+- optional source port when the message uses the `port N` form;
+- numeric SSH disconnect reason code (accepted range 0–255);
+- peer-supplied reason text, excluding a trailing `[preauth]` marker;
+- the existing OpenSSH severity field, which remains independent of the normalized event type.
+
+The parser recognizes both observed forms with no source port (for example `Received disconnect from 203.0.113.8: 11: Bye Bye [preauth]`) and forms containing a port (for example `Received disconnect from 203.0.113.9 port 49152: 3: Auth fail [preauth]`). An `error:`-prefixed disconnect remains one `SSH_EVENT_RECEIVED_DISCONNECT` event with error severity. The reason code and text are only marked present when their respective bounded parsing succeeds; malformed/out-of-range codes are not partially accepted. This data is descriptive evidence, not an attack verdict. In particular, text such as `No more user authentication methods available` is peer-supplied disconnect context, not proof of an sshd internal error.
+
+Synthetic tests use TEST-NET addresses and cover reason codes 3, 11 and 14, IPv4/IPv6, optional ports, severity prefixes and malformed numeric codes. These commits have not yet been validated by the operator on FreeBSD; the next validation must include a clean warning-free build, the full applicable test suite, and the seeded fuzz target. Authentication phase extraction and transport operation/cause remain separate follow-up work.
