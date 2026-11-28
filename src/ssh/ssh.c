@@ -10,6 +10,18 @@
 #include <time.h>
 #include <limits.h>
 
+#define SSH_READ_ERROR (-2)
+
+#ifdef AIRBOTZ_SSH_TESTING
+static int inject_read_error;
+
+void
+ssh_test_inject_read_error(void)
+{
+    inject_read_error = 1;
+}
+#endif
+
 #define SSH_PATH_MAX 512
 #define SSH_TAIL_SIZE 128
 #define SSH_RECORD_MAX 4096
@@ -80,13 +92,30 @@ dispatch_pending_record(void)
  * reader shuts down. Oversized records are discarded through their newline,
  * preventing their suffix from being misinterpreted as a new syslog record.
  */
+static int
+reader_getc(FILE *stream)
+{
+#ifdef AIRBOTZ_SSH_TESTING
+    if (inject_read_error) {
+        inject_read_error = 0;
+        return SSH_READ_ERROR;
+    }
+#endif
+    {
+        int ch = fgetc(stream);
+        if (ch == EOF && ferror(stream))
+            return SSH_READ_ERROR;
+        return ch;
+    }
+}
+
 static void
 process_available(void)
 {
     int ch;
 
     clearerr(logf);
-    while ((ch = fgetc(logf)) != EOF) {
+    while ((ch = reader_getc(logf)) != EOF && ch != SSH_READ_ERROR) {
         reader_stats.last_read_time = time(NULL);
         if (ch == '\n') {
             if (!dropping_record && record_length != 0)
@@ -111,7 +140,7 @@ process_available(void)
         record_buffer[record_length++] = (unsigned char)ch;
     }
 
-    if (ferror(logf)) {
+    if (ch == SSH_READ_ERROR) {
         counter_increment(&reader_stats.read_errors);
         clearerr(logf);
         logger_log("WARN", "SSH log read error");
