@@ -207,6 +207,11 @@ ssh_event_name(enum ssh_event_type type)
     case SSH_EVENT_SSHD_ERROR: return "sshd_error";
     case SSH_EVENT_SSHD_FATAL: return "sshd_fatal";
     case SSH_EVENT_TRANSPORT_ERROR: return "transport_error";
+    case SSH_EVENT_BAD_PROTOCOL_VERSION: return "bad_protocol_version";
+    case SSH_EVENT_BAD_PACKET_LENGTH: return "bad_packet_length";
+    case SSH_EVENT_CORRUPTED_MAC: return "corrupted_mac";
+    case SSH_EVENT_SERVER_LISTENING: return "server_listening";
+    case SSH_EVENT_SYSLOGIN_LOGOUT_ERROR: return "syslogin_logout_error";
     case SSH_EVENT_UNKNOWN:
     default: return "unknown";
     }
@@ -254,12 +259,12 @@ handle_ssh_event(const struct ssh_event *event, void *context)
         (void)snprintf(port, sizeof(port), "-");
 
     logger_log("SSH",
-        "type=%s severity=%s phase=%s pid=%s user=%s address=%s port=%s operation=%s cause=%s repetition_summary=%u repetition_count=%u",
+        "type=%s severity=%s phase=%s pid=%s user=%s address=%s port=%s operation=%s cause=%s packet_length=%u has_packet_length=%u repetition_summary=%u repetition_count=%u",
         ssh_event_name(event->type), severity, phase,
         event->has_pid ? event->pid : "-",
         event->has_username ? event->username : "-",
         event->has_address ? event->address : "-",
-        port, operation, cause,
+        port, operation, cause, event->packet_length, event->has_packet_length,
         event->is_repetition_summary, event->repetition_count);
 }
 
