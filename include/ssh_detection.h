@@ -22,6 +22,7 @@ void ssh_detection_handle(const struct ssh_event *event);
 /* Deterministic entry point for tests; now_ns is monotonic nanoseconds. */
 void ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns);
 void ssh_detection_get_stats(struct ssh_detection_stats *stats);
+void ssh_detection_get_stats_at(struct ssh_detection_stats *stats, uint64_t now_ns);
 void ssh_detection_reset(void);
 
 #endif
