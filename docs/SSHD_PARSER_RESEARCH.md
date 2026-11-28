@@ -557,3 +557,10 @@ and the corresponding `sshd-session[PID]:` process name. A hardening pass now va
 - The parser retains the raw yearless timestamp text; it does not invent a year or timezone.
 
 Synthetic regression tests cover invalid month/day/time/PID/process syntax, month-specific day limits, leap-day acceptance, embedded line breaks and oversized message bodies. This remains a deliberately narrow RFC3164-like parser, not full RFC3164/RFC5424 support. Hostname character grammar, syslog priority/version headers, timezone/year handling and fuzz testing remain open. The hardening commit is awaiting operator validation on FreeBSD.
+
+
+### 15.2 FreeBSD validation and fuzz harness
+
+The strict envelope implementation passed the operator's FreeBSD 15.1 validation after correcting CR/LF character constants: `make clean`, production `make` with no compiler warnings, and `make test` with all applicable non-root tests passing. The root-only IPC test was skipped because the run was unprivileged; this does not change the separate I4 status.
+
+An optional `tests/fuzz_ssh_parser.c` harness now exposes `LLVMFuzzerTestOneInput` for Clang libFuzzer. It caps inputs at 4096 bytes, appends a NUL terminator, invokes `ssh_parse_record`, and asserts event enum/severity bounds plus NUL termination of all exported fixed-size fields. Successful parses must include timestamp and PID. The optional `make fuzz-ssh` target uses libFuzzer, AddressSanitizer and UndefinedBehaviorSanitizer for a 60-second run; it is deliberately excluded from the production build and default `make test`. This harness has been added but has not yet been executed on the target FreeBSD host. No fuzz coverage or sanitizer pass is claimed until the operator runs it.
