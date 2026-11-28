@@ -95,16 +95,20 @@ handle_ipc_request(const char *request, char *response, size_t response_size,
         }
         {
             struct ssh_reader_stats ss;
+            struct ssh_detection_stats ds;
             ssh_get_stats(&ss);
+            ssh_detection_get_stats(&ds);
             snprintf(response, response_size,
-                "OK running permanent=%zu temporary=%zu pf=%s pf_temp_entries=%s pf_perm_entries=%s ssh_source=%s ssh_seen=%llu ssh_parsed=%llu ssh_classified=%llu ssh_unknown=%llu ssh_malformed=%llu ssh_oversized=%llu ssh_read_errors=%llu ssh_rotations=%llu ssh_missing=%llu ssh_recovered=%llu ssh_last_read=%lld ssh_last_record=%lld\n",
+                "OK running permanent=%zu temporary=%zu pf=%s pf_temp_entries=%s pf_perm_entries=%s ssh_source=%s ssh_seen=%llu ssh_parsed=%llu ssh_classified=%llu ssh_unknown=%llu ssh_malformed=%llu ssh_oversized=%llu ssh_read_errors=%llu ssh_rotations=%llu ssh_missing=%llu ssh_recovered=%llu ssh_last_read=%lld ssh_last_record=%lld ssh_auth_failures=%llu ssh_bruteforce_findings=%llu ssh_detection_active=%u ssh_detection_evictions=%llu ssh_detection_partial=%u\n",
                 manager->permanent_count, manager->temporary_count,
                 pf_state, temp_state, perm_state,
                 ss.source_available ? "available" : "unavailable", ss.records_seen,
                 ss.records_parsed, ss.events_classified, ss.events_unknown,
                 ss.records_malformed, ss.records_oversized, ss.read_errors,
                 ss.rotations, ss.missing_transitions, ss.recovery_transitions,
-                (long long)ss.last_read_time, (long long)ss.last_record_time);
+                (long long)ss.last_read_time, (long long)ss.last_record_time,
+                ds.auth_failures_observed, ds.brute_force_findings,
+                ds.active_observations, ds.capacity_evictions, ds.partial_visibility);
         }
         return 0;
     }
@@ -236,7 +240,10 @@ handle_ssh_event(const struct ssh_event *event, void *context)
     char port[16];
 
     (void)context;
-    if (!event || event->type == SSH_EVENT_UNKNOWN)
+    if (!event)
+        return;
+    ssh_detection_handle(event);
+    if (event->type == SSH_EVENT_UNKNOWN)
         return;
 
     if (event->severity == SSH_LOG_SEVERITY_ERROR)
@@ -287,6 +294,7 @@ core_init(const char *path)
     pf_ready = 0;
     ssh_ready = 0;
     ipc_ready = 0;
+    ssh_detection_reset();
 
     if (config_load(path, &cfg) != 0)
         return -1;
