@@ -130,7 +130,15 @@ int main(void) {
             "Dec 10 06:55:46 LabSZ sshd[24200]: Did not receive identification string from 203.0.113.45",
             &event) == 0);
         assert(event.type == SSH_EVENT_IDENTIFICATION_MISSING);
+        assert(event.has_address);
         assert(strcmp(event.address, "203.0.113.45") == 0);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: Did not receive identification string from 2001:db8::45 port 22",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_IDENTIFICATION_MISSING);
+        assert(event.has_address);
+        assert(strcmp(event.address, "2001:db8::45") == 0);
 
         assert(ssh_parse_record(
             "Dec 10 06:55:46 LabSZ sshd[24200]: error: Received disconnect from 203.0.113.46: 3: Auth fail [preauth]",
