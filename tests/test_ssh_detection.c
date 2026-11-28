@@ -211,16 +211,19 @@ main(void)
 
     /* Distributed password spray: many sources, many accounts, low per-key rates. */
     ssh_detection_reset();
-    for (i = 0; i < 10; ++i) {
+    for (i = 0; i < 7; ++i) {
         char address[SSH_EVENT_IP_MAX];
         char username[SSH_EVENT_USER_MAX];
-        (void)snprintf(address, sizeof(address), "203.0.113.%u", 10U + i / 2U);
+        (void)snprintf(address, sizeof(address), "203.0.113.%u", 10U + i % 5U);
         (void)snprintf(username, sizeof(username), "target%u", i % 5U);
         event = failure(address, username);
         ssh_detection_process_at(&event, (uint64_t)(980 + i) * SECOND);
     }
+    assert(count_distributed_spray_findings(path) == 0);
+    event = failure("203.0.113.12", "target2");
+    ssh_detection_process_at(&event, 987 * SECOND);
     assert(count_distributed_spray_findings(path) == 1);
-    ssh_detection_get_stats_at(&stats, 989 * SECOND);
+    ssh_detection_get_stats_at(&stats, 987 * SECOND);
     assert(stats.distributed_password_spray_findings == 1);
     assert(stats.distributed_brute_force_findings == 0);
     assert(stats.password_spray_findings == 0);
