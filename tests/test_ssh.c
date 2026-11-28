@@ -87,12 +87,51 @@ int main(void) {
             &event) == 0);
         assert(event.type == SSH_EVENT_RECEIVED_DISCONNECT);
         assert(strcmp(event.address, "203.0.113.8") == 0);
+        assert(event.has_disconnect_reason_code);
+        assert(event.disconnect_reason_code == 11);
+        assert(event.has_disconnect_reason_text);
+        assert(strcmp(event.disconnect_reason, "Bye Bye") == 0);
+        assert(!event.has_port);
 
         assert(ssh_parse_record(
             "Dec 10 06:55:46 LabSZ sshd[24200]: Received disconnect from 2001:db8::8: 11: Bye Bye [preauth]",
             &event) == 0);
         assert(event.type == SSH_EVENT_RECEIVED_DISCONNECT);
         assert(strcmp(event.address, "2001:db8::8") == 0);
+        assert(event.has_disconnect_reason_code);
+        assert(event.disconnect_reason_code == 11);
+        assert(strcmp(event.disconnect_reason, "Bye Bye") == 0);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: Received disconnect from 203.0.113.9 port 49152: 3: Auth fail [preauth]",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_RECEIVED_DISCONNECT);
+        assert(strcmp(event.address, "203.0.113.9") == 0);
+        assert(event.has_port && event.port == 49152);
+        assert(event.has_disconnect_reason_code);
+        assert(event.disconnect_reason_code == 3);
+        assert(event.has_disconnect_reason_text);
+        assert(strcmp(event.disconnect_reason, "Auth fail") == 0);
+
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: error: Received disconnect from 2001:db8::9 port 2222: 14: No more user authentication methods available [preauth]",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_RECEIVED_DISCONNECT);
+        assert(event.severity == SSH_LOG_SEVERITY_ERROR);
+        assert(strcmp(event.address, "2001:db8::9") == 0);
+        assert(event.has_port && event.port == 2222);
+        assert(event.has_disconnect_reason_code);
+        assert(event.disconnect_reason_code == 14);
+        assert(strcmp(event.disconnect_reason,
+                      "No more user authentication methods available") == 0);
+
+        /* Malformed reason codes must not be partially accepted. */
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: Received disconnect from 203.0.113.10: 999: Invalid reason [preauth]",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_RECEIVED_DISCONNECT);
+        assert(!event.has_disconnect_reason_code);
+        assert(!event.has_disconnect_reason_text);
 
         assert(ssh_parse_record(
             "Dec 10 06:55:46 LabSZ sshd[24200]: Disconnecting: Too many authentication failures for root [preauth]",
