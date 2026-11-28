@@ -6,15 +6,11 @@
 #include <sys/types.h>
 #include <string.h>
 #include <unistd.h>
-#include <arpa/inet.h>
 #include <stdio.h>
 
 #define SSH_PATH_MAX 512
 #define SSH_TAIL_SIZE 128
 #define SSH_RECORD_MAX 4096
-
-int ssh_extract_address(const char *, char *, size_t);
-const char *ssh_classify(const char *);
 
 static FILE *logf;
 static char log_path[SSH_PATH_MAX];
