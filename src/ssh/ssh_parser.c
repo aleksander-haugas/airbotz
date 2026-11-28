@@ -255,7 +255,7 @@ ssh_parse_record(const char *line, struct ssh_event *event)
     size_t length;
     char process[64];
     char message[SSH_EVENT_MESSAGE_MAX];
-    const char *colon;
+    char *colon;
     const char *message_start;
     const char *end;
 
@@ -306,7 +306,7 @@ ssh_parse_record(const char *line, struct ssh_event *event)
     if (!colon)
         return -1;
     message_start = field + (colon - process) + 1;
-    * (char *)colon = '\0';
+    *colon = '\0';
     if (strncmp(process, "sshd[", 5) != 0 &&
         strncmp(process, "sshd-session[", 13) != 0)
         return -1;
