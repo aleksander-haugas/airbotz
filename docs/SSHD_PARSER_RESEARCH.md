@@ -312,3 +312,60 @@ The normalized event model must support:
 4. Define the normalized event schema and correlation keys before changing parser behavior.
 5. Turn each accepted message shape into a named automated test case using the phrase “reference sample”; unknown and malformed messages also need explicit test cases.
 6. Re-run counts with independent predicates/tags rather than mutually exclusive `else if` classification.
+
+
+### 14.6 Third corpus: local `SSH.log` inventory (operator-run, 2026-11-28)
+
+The operator examined `~/Projects/airbotz/SSH.log` locally. The raw file was not uploaded to the repository.
+
+File facts reported by the operator:
+- `file`: ASCII text with CRLF line terminators.
+- SHA-256: `89eee9e36c182722f9fadc6e5617a4818ffc66109e7e222b8f9e8b78fc3aa2f3`.
+- `wc -l`: 655,146 newline characters/terminated lines.
+- `grep -c 'sshd'`: 655,147 matching records; the difference is consistent with a final matching line without a terminating newline, but this should be confirmed with a byte-level check before treating it as fact.
+- The AWK inventory also counted 655,147 records containing `sshd`.
+
+An independent-predicate inventory reported the following counts. These are raw matching-line counts, not deduplicated authentication attempts or sessions:
+
+| Predicate / observed family | Matching lines |
+|---|---:|
+| Failed password | 197,587 |
+| PAM authentication failure | 155,057 |
+| Connection closed | 68,958 |
+| Received disconnect | 48,705 |
+| PAM failure summary | 38,163 |
+| PAM max-retries notice | 37,963 |
+| Server-initiated disconnect | 37,299 |
+| PAM check pass | 19,852 |
+| Reverse-DNS warning | 18,909 |
+| `input_userauth_request` | 14,594 |
+| `Invalid user` | 14,594 |
+| Connection reset | 955 |
+| Accepted password | 182 |
+
+No matches were reported for failed/accepted public-key predicates. This means only that those exact strings were not found by the supplied expressions; it does not establish that the source server had public-key authentication disabled.
+
+Representative exact message shapes observed in the operator's sample output:
+
+- Invalid account is represented by at least two separate lines: `Invalid user webmaster from 173.234.31.186` and `input_userauth_request: invalid user webmaster [preauth]`. They are distinct log records about the same authentication context and must not automatically become two independent attempts.
+- PAM emits distinct records: `pam_unix(sshd:auth): check pass; user unknown`, `pam_unix(sshd:auth): authentication failure; ...`, `PAM 5 more authentication failures; ...`, and `PAM service(sshd) ignoring max retries; 6 > 3`.
+- Failed authentication includes `Failed password for invalid user <name> from <address> port <port> ssh2`, as well as valid-looking account names such as `root`.
+- The corpus contains `Failed none for invalid user 0 from <address> port <port> ssh2`; this is not matched by a `Failed password` predicate and needs its own message-catalogue entry.
+- Client disconnect: `Received disconnect from <address>: 11: Bye Bye [preauth]`.
+- Server disconnect: `Disconnecting: Too many authentication failures for <user> [preauth]`.
+- Reverse-DNS mismatch: `reverse mapping checking getaddrinfo for <hostname> [<address>] failed - POSSIBLE BREAK-IN ATTEMPT!`.
+- Pre-authentication connection closure: `Connection closed by <address> [preauth]`.
+- Other pre-authentication observations include `Did not receive identification string from <address>`.
+- Abrupt socket failures include `fatal: Write failed: Connection reset by peer [preauth]` and `fatal: Read from socket failed: Connection reset by peer [preauth]`. The parser must preserve the fatal/error subtype as well as the reset cause rather than flattening both into a generic connection-reset label.
+- Successful password authentication is followed in the examples by PAM session-open/session-close records. These should be separate lifecycle events and correlated cautiously; the sample includes a session-close username that differs from the preceding successful-login examples, so do not pair records by adjacency alone.
+
+Classification and counting corrections:
+- The first exclusive AWK pass put `input_userauth_request: invalid user ...` into `userauth_request` before it could reach the later `invalid_user` branch. The independent-predicate pass shows 14,594 matches for each signature. These are two message shapes, not evidence that each individual line matched both predicates.
+- The independent-predicate pass is useful for inventory but its totals are intentionally non-exclusive and must not be summed to estimate attempts.
+- `Connection reset` appears inside `fatal:` messages. Preserve both the OpenSSH severity prefix and the underlying socket error.
+- The earlier `OTHER` bucket includes meaningful unclassified messages such as identification-string absence and `Failed none`; it is not a homogeneous event type.
+- `Received disconnect`, `Disconnecting:`, and `Connection closed` remain distinct message families.
+- PAM records, failed-password records and disconnect records may all describe one broader connection/authentication sequence. Correlation must use parsed connection/process/time evidence and must not infer one attack per line.
+
+The corpus origin, generating OS/distribution, OpenSSH version, date coverage, timezone, provenance URL and usage permission remain unknown. Do not label it as FreeBSD/OpenSSH 10.0p2 data without independent evidence. The reported CRLF format and SHA-256 are file-level fingerprints only.
+
