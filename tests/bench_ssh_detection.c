@@ -85,14 +85,14 @@ make_benchmark_event(struct ssh_event *event,
     switch (scenario) {
     case BENCH_MIXED_NORMAL:
         /*
-         * One isolated failure every 2500 records, followed by a success
+         * One isolated failure every 5000 records, followed by a success
          * on the same tuple. Other records are mostly accepted auth with
          * a small amount of PAM noise; this stays below detection thresholds.
          */
         if ((sequence % 5000U) == 0U) {
             session_id = sequence;
             event->type = SSH_EVENT_FAILED_PASSWORD;
-        } else if ((sequence % 2500U) == 1U) {
+        } else if ((sequence % 5000U) == 1U) {
             session_id = sequence - 1U;
             event->type = SSH_EVENT_ACCEPTED_PASSWORD;
         } else if ((sequence % 100U) == 2U) {
@@ -211,6 +211,8 @@ run_scenario(const struct scenario_info *scenario,
     maximum = samples[SAMPLE_COUNT - 1U];
     spread_percent = minimum == 0 ? 0.0 :
         ((double)(maximum - minimum) * 100.0) / (double)minimum;
+    ssh_detection_get_stats_at(&stats,
+        sample_time_ns + (uint64_t)EVENTS_PER_SAMPLE * 1000000U);
 
     printf("scenario=%s\n", scenario->name);
     printf("warmup_events=%u samples=%u events_per_sample=%u total_measured_events=%u active_capacity=%u\n",
@@ -227,6 +229,13 @@ run_scenario(const struct scenario_info *scenario,
     printf("min_ns_per_event=%llu max_ns_per_event=%llu spread_percent=%.1f\n",
            (unsigned long long)minimum, (unsigned long long)maximum,
            spread_percent);
+    printf("findings_source_bruteforce=%llu source_spray=%llu distributed_bruteforce=%llu distributed_spray=%llu invalid_enum=%llu success_after_failures=%llu active=%u evictions=%llu\n",
+           stats.brute_force_findings, stats.password_spray_findings,
+           stats.distributed_brute_force_findings,
+           stats.distributed_password_spray_findings,
+           stats.invalid_account_enumeration_findings,
+           stats.success_after_failure_findings,
+           stats.active_observations, stats.capacity_evictions);
     printf("\n");
     return 0;
 }
