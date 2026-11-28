@@ -498,7 +498,8 @@ process_success_after_failures(const struct ssh_event *event,
     unsigned int i;
     char safe_account[SSH_EVENT_USER_MAX];
 
-    if (!event->has_username || !event->has_port || !event->has_pid ||
+    if (!event->has_username || !event->has_port || event->port == 0 ||
+        event->port > 65535U || !event->has_pid ||
         event->username[0] == '\0' || event->pid[0] == '\0' ||
         memchr(event->username, '\0', sizeof(event->username)) == NULL ||
         memchr(event->pid, '\0', sizeof(event->pid)) == NULL)
@@ -615,7 +616,8 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
     slot->observed_ns = now_ns;
     slot->weight = weight;
     slot->invalid_user = event->invalid_user != 0;
-    slot->has_port = event->has_port != 0;
+    slot->has_port = event->has_port != 0 && event->port > 0 &&
+        event->port <= 65535U;
     slot->port = event->port;
     if (event->has_pid && event->pid[0] != '\\0' &&
         memchr(event->pid, '\\0', sizeof(event->pid)) != NULL)
