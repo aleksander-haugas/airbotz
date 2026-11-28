@@ -83,6 +83,8 @@ int main(void) {
         assert(event.type == SSH_EVENT_ACCEPTED_PUBLICKEY);
         assert(strcmp(event.username, "jmzhu") == 0);
         assert(strcmp(event.address, "2001:db8::1") == 0);
+        assert(event.has_pid && strcmp(event.pid, "314") == 0);
+        assert(event.has_port && event.port == 22);
 
         assert(ssh_parse_record(
             "Dec 10 06:55:46 LabSZ sshd[24200]: Failed none for invalid user test from 198.51.100.2 port 22 ssh2",
