@@ -398,10 +398,15 @@ struct distributed_spray_metrics {
     unsigned int maximum_source_attempts;
 };
 
+struct spray_compact_bucket {
+    uint16_t observation_index;
+    uint8_t weight;
+};
+
 static struct distributed_spray_metrics
 get_distributed_spray_metrics(void)
 {
-    struct spray_bucket buckets[SPRAY_HASH_CAPACITY];
+    struct spray_compact_bucket buckets[SPRAY_HASH_CAPACITY];
     struct distributed_spray_metrics metrics = {0, 0, 0, 0, 0};
     unsigned int i;
 
@@ -418,7 +423,7 @@ get_distributed_spray_metrics(void)
             metrics.total_attempts += item->weight;
         slot = username_hash(item->username) & (SPRAY_HASH_CAPACITY - 1U);
         for (probes = 0; probes < SPRAY_HASH_CAPACITY; ++probes) {
-            struct spray_bucket *bucket = &buckets[slot];
+            struct spray_compact_bucket *bucket = &buckets[slot];
             if (bucket->observation_index == 0) {
                 bucket->observation_index = (uint16_t)(i + 1U);
                 bucket->weight = item->weight > SSH_DETECTION_DISTRIBUTED_SPRAY_PER_ACCOUNT_MAX ?
@@ -453,7 +458,7 @@ get_distributed_spray_metrics(void)
             continue;
         slot = address_hash(item->address) & (SPRAY_HASH_CAPACITY - 1U);
         for (probes = 0; probes < SPRAY_HASH_CAPACITY; ++probes) {
-            struct spray_bucket *bucket = &buckets[slot];
+            struct spray_compact_bucket *bucket = &buckets[slot];
             if (bucket->observation_index == 0) {
                 bucket->observation_index = (uint16_t)(i + 1U);
                 bucket->weight = item->weight > SSH_DETECTION_DISTRIBUTED_SPRAY_PER_SOURCE_MAX ?
