@@ -578,7 +578,7 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
         is_invalid_account_enumeration(&invalid_enum_after)) {
         increment_saturated(&detection_stats.invalid_account_enumeration_findings);
         logger_log("SSH_DETECTION",
-            "rule=ssh.account.enumeration.invalid address=%s failures=%llu distinct_invalid_accounts=%u max_per_account=%llu window_seconds=%u attempt_threshold=%u account_threshold=%u per_account_max=%u confidence=%s evidence=failed_password_invalid_user_records",
+            "rule=ssh.account.enumeration.invalid address=%s failures=%llu distinct_invalid_accounts=%u max_per_account=%u window_seconds=%u attempt_threshold=%u account_threshold=%u per_account_max=%u confidence=%s evidence=failed_password_invalid_user_records",
             normalized_address, invalid_enum_after.total_attempts,
             invalid_enum_after.distinct_accounts, invalid_enum_after.maximum_account_attempts,
             SSH_DETECTION_WINDOW_SECONDS, SSH_DETECTION_INVALID_ENUM_ATTEMPT_THRESHOLD,
