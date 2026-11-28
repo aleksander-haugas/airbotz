@@ -153,16 +153,27 @@ ssh_detection_handle(const struct ssh_event *event)
 }
 
 void
-ssh_detection_get_stats(struct ssh_detection_stats *stats)
+ssh_detection_get_stats_at(struct ssh_detection_stats *stats, uint64_t now_ns)
 {
     if (!stats)
         return;
+    if (now_ns < last_now_ns)
+        now_ns = last_now_ns;
+    last_now_ns = now_ns;
+    expire_observations(now_ns);
     *stats = detection_stats;
-    stats->active_observations = count;
-    stats->partial_visibility =
-        degraded_until_ns != 0 && last_now_ns < degraded_until_ns;
 }
 
+void
+ssh_detection_get_stats(struct ssh_detection_stats *stats)
+{
+    struct timespec ts;
+
+    if (!stats || clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
+        return;
+    ssh_detection_get_stats_at(stats,
+        (uint64_t)ts.tv_sec * NS_PER_SECOND + (uint64_t)ts.tv_nsec);
+}
 void
 ssh_detection_reset(void)
 {
