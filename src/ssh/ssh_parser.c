@@ -60,6 +60,8 @@ int ssh_extract_address(const char *line, char *out, size_t cap) {
                     return 1;
 
                 token = end;
+                if (*token == ',')
+                    token++;
             }
             p++;
         }
