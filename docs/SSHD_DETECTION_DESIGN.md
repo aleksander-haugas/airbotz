@@ -211,11 +211,11 @@ Both rules are deliberately bounded and observe-only. They use only normalized `
 - Operator validation on FreeBSD 15.1 passed: clean warning-free production build, `make test`, and `sudo make test` including root-only IPC. Three invocations produced per-run medians of 423841, 409573 and 333260 ns/event. Across all 15 samples the median was 390414 ns/event, with a 319881–435266 ns/event range; individual invocation spreads were approximately 31.8–35.5%. The revised timed region excludes event construction, so these numbers are not directly comparable with the original harness. The variability is still too high to attribute small changes to code.
 
 
-### 11.8.2 Distributed password-spray aggregation pass consolidation (pending operator validation)
+### 11.8.2 Distributed password-spray aggregation pass consolidation (operator-validated)
 
 - `get_distributed_spray_metrics()` now traverses the active observation ring once and updates the account and source scratch hash tables during that same traversal, rather than performing two separate full-ring passes.
 - The account and source hash tables remain independent, fixed-size, generation-tagged structures. Hash keys, weights, caps, threshold predicates, pre-event/post-event comparisons, eviction semantics and finding output are unchanged.
-- This is a bounded loop-fusion change only; it does not change detector policy, production configuration, PF state, logging inputs or daemon behavior. Operator build/tests and refined benchmark are pending.
+- This is a bounded loop-fusion change only; it does not change detector policy, production configuration, PF state, logging inputs or daemon behavior. Operator validation on FreeBSD 15.1 passed: clean warning-free production build, `make test`, and `sudo make test` including root-only IPC. Three refined-benchmark invocations (15 samples) measured 317121, 365818, 414501, 426975, 441360, 315810, 320389, 338700, 401367, 408165, 310634, 316726, 346870, 388407 and 429644 ns/event. The combined median is 365818 ns/event (~2734 events/s), range 310634–441360; compared with the immediately preceding refined-harness median of 390414 ns/event, this is 6.3% lower. Within-invocation spreads were 29.2–39.2%, and per-invocation medians were 414501, 338700 and 346870 ns/event, so the result is favorable but not conclusive. These synthetic host-specific measurements are not a production capacity claim.
 
 ### 11.7 Shared evidence and limits
 
