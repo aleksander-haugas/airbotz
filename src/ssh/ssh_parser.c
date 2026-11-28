@@ -145,7 +145,7 @@ extract_user_and_address(struct ssh_event *event, const char *text,
     user_len = (size_t)(split - user);
     while (user_len && isspace((unsigned char)user[user_len - 1]))
         user_len--;
-    if (user_len >= 12 && memcmp(user, "invalid user ", 13) == 0) {
+    if (user_len >= 13 && memcmp(user, "invalid user ", 13) == 0) {
         event->invalid_user = 1;
         user += 13;
         user_len -= 13;
