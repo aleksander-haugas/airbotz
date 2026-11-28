@@ -1,6 +1,6 @@
 # SSHD Detection Design — FreeBSD-first
 
-Status: initial source/account brute-force detector and source-address canonicalization are validated on FreeBSD 15.1. A separate bounded source password-spray rule is implemented and awaiting operator validation. Distributed targeting and other correlation families remain design work.
+Status: source/account brute force, source password spraying, and source-address canonicalization are validated on FreeBSD 15.1. A bounded distributed brute-force rule (one account across multiple source IPs) is implemented and awaiting operator validation. Distributed spraying and other correlation families remain design work.
 
 This document defines the safety and data semantics required before AirBotz turns parsed SSHD records into detections. It does not enable PF actions, change the production configuration, or claim that the current parser is a complete OpenSSH grammar.
 
@@ -12,7 +12,7 @@ The current branch has:
 - a production log tailer with partial-line handling, oversized-record discard, rename rotation and copytruncate recovery;
 - dispatch into the core, which writes normalized SSH event summaries and invokes observe-only source/account brute-force and source password-spray detectors.
 
-The core includes bounded SSH detections for repeated failures against one account from one source and low-rate failures spread across multiple accounts from one source. Unknown events are still ignored by the SSH callback. Distributed targeting, invalid-account enumeration, success-after-failure, risk scoring and richer alert reporting are not implemented. No SSH-triggered PF response exists.
+The core includes bounded SSH detections for repeated failures against one account from one source, low-rate failures spread across multiple accounts from one source, and repeated failures against one account spread across multiple source IPs. Unknown events are still ignored by the SSH callback. Distributed password spraying across multiple accounts and source IPs, invalid-account enumeration, success-after-failure, risk scoring and richer alert reporting are not implemented. No SSH-triggered PF response exists.
 
 The reader opens the configured log at EOF on daemon startup. It intentionally does not replay historical records. A deleted/missing path after startup is currently retried by the reader, but SSH source health and event-loss telemetry are not exposed as a complete status contract.
 
@@ -155,13 +155,21 @@ Both rules are deliberately bounded and observe-only. They use only normalized `
 - This is intentionally a separate pattern from repeated attempts against one account. It does not detect distributed spraying across multiple source addresses.
 - A finding is emitted only when all three conditions become true; it is not repeated for every subsequent failure while the condition remains true.
 
+### 11.3 Distributed brute force against one account
+
+- Aggregates failed-password observations for one parsed username across canonical source IP addresses.
+- Provisional trigger: at least 8 observations, at least 5 distinct source IPs, and no more than 2 observations from any one source within the 300-second monotonic window.
+- Emits once when the combined pattern crosses all conditions. A single source repeatedly attacking one account does not satisfy this rule.
+- The rule is a heuristic, not proof of coordination: shared NAT, proxy infrastructure, botnets and legitimate distributed clients can produce overlapping patterns. Findings remain observe-only and provisional.
+- Distributed password spraying (multiple accounts attacked across multiple IPs) is a different pattern and is not implemented by this rule.
+
 ### 11.3 Shared evidence and limits
 
 - A syslog repetition summary contributes its explicit number of additional copies, not one plus that number. The summary remains one bounded observation and does not synthesize timestamps. The represented copies have reduced temporal precision.
 - The correlation store is a fixed 4096-entry ring. It expires entries by monotonic time and reports capacity evictions and partial visibility. The pre-event detection state is evaluated after any required eviction, so an evicted observation cannot incorrectly suppress a threshold crossing.
 - Source keys are canonicalized with `inet_pton()` / `inet_ntop()`. Equivalent IPv4/IPv6 textual forms share a key. Invalid or unterminated address fields are rejected. IPv4-mapped IPv6 addresses remain in the IPv6 family and are not merged with native IPv4 addresses.
 - Per-account spray counts use a fixed-size hash table bounded above the maximum ring occupancy; scratch memory and correlation state are bounded.
-- STATUS exposes failed-password observation count, brute-force findings, password-spray findings, active ring entries, capacity evictions and partial-visibility state.
+- STATUS exposes failed-password observation count, local brute-force findings, source password-spray findings, distributed brute-force findings, active ring entries, capacity evictions and partial-visibility state.
 - Capacity eviction reduces finding confidence because older evidence may have been lost. The detector never infers an account from adjacent log records.
 - Thresholds require tuning against labelled benign and attack datasets. No inference should be drawn from the frequency of messages in a small reference corpus.
 - No PF command, address-manager mutation, service change or automatic block is invoked.
