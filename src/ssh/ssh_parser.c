@@ -212,8 +212,11 @@ classify_message(struct ssh_event *event, const char *message)
         }
     } else if (strncmp(message, "Received disconnect from ", 25) == 0) {
         event->type = SSH_EVENT_RECEIVED_DISCONNECT;
+        const char *address_end;
         p = message + 25;
-        if (is_ip_address(p, strcspn(p, " \t:"),
+        address_end = strstr(p, ": ");
+        if (address_end &&
+            is_ip_address(p, (size_t)(address_end - p),
                           event->address, sizeof(event->address)))
             event->has_address = 1;
     } else if (strncmp(message, "Disconnecting:", 14) == 0) {
