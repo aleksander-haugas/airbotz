@@ -184,6 +184,30 @@ get_spray_metrics(const char *address)
     return metrics;
 }
 
+static void
+safe_username_label(const char *username, char *output, size_t output_size)
+{
+    size_t i;
+
+    if (!output || output_size == 0)
+        return;
+    output[0] = '\0';
+    if (!username)
+        return;
+
+    for (i = 0; i + 1U < output_size && username[i] != '\0'; ++i) {
+        unsigned char ch = (unsigned char)username[i];
+
+        if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+            (ch >= '0' && ch <= '9') || ch == '_' || ch == '-' ||
+            ch == '.' || ch == '@')
+            output[i] = (char)ch;
+        else
+            output[i] = '_';
+    }
+    output[i] = '\0';
+}
+
 static int
 is_password_spray(const struct spray_metrics *metrics)
 {
@@ -202,6 +226,7 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
     unsigned int tail;
     char normalized_address[SSH_EVENT_IP_MAX];
     char normalized_username[SSH_EVENT_USER_MAX];
+    char safe_account[SSH_EVENT_USER_MAX];
     struct auth_observation *slot;
 
     if (!event)
@@ -266,9 +291,11 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
         if (previous < SSH_DETECTION_BRUTE_FORCE_THRESHOLD &&
             current >= SSH_DETECTION_BRUTE_FORCE_THRESHOLD) {
             increment_saturated(&detection_stats.brute_force_findings);
+            safe_username_label(normalized_username, safe_account,
+                                sizeof(safe_account));
             logger_log("SSH_DETECTION",
                 "rule=ssh.bruteforce.source_account address=%s account=%s failures=%llu window_seconds=%u threshold=%u confidence=%s evidence=failed_password_records",
-                normalized_address, normalized_username, current,
+                normalized_address, safe_account, current,
                 SSH_DETECTION_WINDOW_SECONDS, SSH_DETECTION_BRUTE_FORCE_THRESHOLD,
                 detection_stats.partial_visibility ? "reduced" : "moderate");
         }
