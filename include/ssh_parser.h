@@ -86,6 +86,9 @@ struct ssh_event {
     unsigned int invalid_user;
     unsigned int has_disconnect_reason_code;
     unsigned int has_disconnect_reason_text;
+    /* Number of additional copies represented by a syslog repeat summary. */
+    unsigned int repetition_count;
+    unsigned int is_repetition_summary;
 };
 
 /*
