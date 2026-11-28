@@ -336,27 +336,36 @@ valid_month(const char *month)
     return 0;
 }
 
+static unsigned int
+month_max_day(const char *month)
+{
+    if (memcmp(month, "Feb", 3) == 0)
+        return 29U;
+    if (memcmp(month, "Apr", 3) == 0 ||
+        memcmp(month, "Jun", 3) == 0 ||
+        memcmp(month, "Sep", 3) == 0 ||
+        memcmp(month, "Nov", 3) == 0)
+        return 30U;
+    return 31U;
+}
+
 static int
 valid_process_field(const char *field, size_t length,
                     char *pid_out, size_t pid_cap)
 {
-    const char *prefix;
     size_t prefix_len;
     size_t pid_len;
     unsigned int pid_value;
 
     if (length > 5 && memcmp(field, "sshd[", 5) == 0) {
-        prefix = "sshd[";
         prefix_len = 5;
     } else if (length > 13 &&
                memcmp(field, "sshd-session[", 13) == 0) {
-        prefix = "sshd-session[";
         prefix_len = 13;
     } else {
         return 0;
     }
 
-    (void)prefix;
     if (field[length - 1] != ':')
         return 0;
     if (length < prefix_len + 3 ||
@@ -402,7 +411,8 @@ ssh_parse_record(const char *line, struct ssh_event *event)
         return -1;
 
     if (day_len > 2 ||
-        !parse_decimal_range(day_start, day_len, 1U, 31U, &day) ||
+        !parse_decimal_range(day_start, day_len, 1U,
+                             month_max_day(month_start), &day) ||
         time_len != 8 || time_start[2] != ':' || time_start[5] != ':' ||
         !parse_decimal_range(time_start, 2, 0U, 23U, &hour) ||
         !parse_decimal_range(time_start + 3, 2, 0U, 59U, &minute) ||
