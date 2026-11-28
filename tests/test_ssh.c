@@ -84,6 +84,12 @@ int main(void) {
         assert(event.type == SSH_EVENT_SERVER_DISCONNECT);
 
         assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=192.0.2.44",
+            &event) == 0);
+        assert(event.type == SSH_EVENT_PAM_AUTH_FAILURE);
+        assert(strcmp(event.address, "192.0.2.44") == 0);
+
+        assert(ssh_parse_record(
             "Dec 10 06:55:46 LabSZ sshd[24200]: pam_unix(sshd:session): session opened for user jmzhu by (uid=0)",
             &event) == 0);
         assert(event.type == SSH_EVENT_SESSION_OPENED);
