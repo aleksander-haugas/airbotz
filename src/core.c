@@ -219,6 +219,7 @@ handle_ssh_event(const struct ssh_event *event, void *context)
     const char *phase = "unknown";
     const char *operation = "unknown";
     const char *cause = "unknown";
+    char port[16];
 
     (void)context;
     if (!event || event->type == SSH_EVENT_UNKNOWN)
@@ -247,15 +248,18 @@ handle_ssh_event(const struct ssh_event *event, void *context)
     default: break;
     }
 
+    if (event->has_port)
+        (void)snprintf(port, sizeof(port), "%u", event->port);
+    else
+        (void)snprintf(port, sizeof(port), "-");
+
     logger_log("SSH",
-        "type=%s severity=%s phase=%s pid=%s user=%s address=%s port=%s%u operation=%s cause=%s",
+        "type=%s severity=%s phase=%s pid=%s user=%s address=%s port=%s operation=%s cause=%s",
         ssh_event_name(event->type), severity, phase,
         event->has_pid ? event->pid : "-",
         event->has_username ? event->username : "-",
         event->has_address ? event->address : "-",
-        event->has_port ? "" : "-",
-        event->has_port ? event->port : 0U,
-        operation, cause);
+        port, operation, cause);
 }
 
 int
