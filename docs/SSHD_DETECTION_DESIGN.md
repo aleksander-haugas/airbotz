@@ -143,7 +143,7 @@ Both rules are deliberately bounded and observe-only. They use only normalized `
 
 ### 11.1 Source/account brute force
 
-- Counts failed-password observations from the same canonical source address against the same non-empty parsed username.
+- Counts failed-password observations from the same canonical source address against the same non-empty parsed username. The account label in the finding is sanitized before logging because usernames originate from untrusted remote input.
 - Initial threshold: 8 observations in a 300-second monotonic window. These are provisional engineering values, not thresholds inferred from reference samples.
 - Emits once when the source/account count crosses the threshold; a later crossing can occur after the old observations expire.
 - Records without a parsed username may contribute to source-level spray totals but cannot trigger this account-specific rule.
