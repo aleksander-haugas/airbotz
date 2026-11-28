@@ -166,6 +166,56 @@ int main(void) {
         assert(event.message[0] != '\0');
 
         assert(ssh_parse_record("not a syslog record", &event) == -1);
+
+        /* Strict syslog envelope validation: month, day and clock ranges. */
+        assert(ssh_parse_record(
+            "Xan 10 06:55:46 LabSZ sshd[24200]: Failed password for root from 192.0.2.1 port 22 ssh2",
+            &event) == -1);
+        assert(ssh_parse_record(
+            "Dec 00 06:55:46 LabSZ sshd[24200]: Failed password for root from 192.0.2.1 port 22 ssh2",
+            &event) == -1);
+        assert(ssh_parse_record(
+            "Dec 32 06:55:46 LabSZ sshd[24200]: Failed password for root from 192.0.2.1 port 22 ssh2",
+            &event) == -1);
+        assert(ssh_parse_record(
+            "Dec 10 24:00:00 LabSZ sshd[24200]: Failed password for root from 192.0.2.1 port 22 ssh2",
+            &event) == -1);
+        assert(ssh_parse_record(
+            "Dec 10 06:60:00 LabSZ sshd[24200]: Failed password for root from 192.0.2.1 port 22 ssh2",
+            &event) == -1);
+        assert(ssh_parse_record(
+            "Dec 10 06:55:60 LabSZ sshd[24200]: Failed password for root from 192.0.2.1 port 22 ssh2",
+            &event) == -1);
+
+        /* The process token must have a numeric, non-zero PID and exact syntax. */
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[abc]: Failed password for root from 192.0.2.1 port 22 ssh2",
+            &event) == -1);
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[0]: Failed password for root from 192.0.2.1 port 22 ssh2",
+            &event) == -1);
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]junk: Failed password for root from 192.0.2.1 port 22 ssh2",
+            &event) == -1);
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd-session[314]: Accepted publickey for jmzhu from 2001:db8::1 port 22 ssh2",
+            &event) == 0);
+
+        /* Reject embedded line breaks and overlong message bodies, not truncate them. */
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: first line\\nsecond line",
+            &event) == -1);
+        {
+            char oversized[1200];
+            const char *prefix =
+                "Dec 10 06:55:46 LabSZ sshd[24200]: ";
+            size_t prefix_len = strlen(prefix);
+            memcpy(oversized, prefix, prefix_len);
+            memset(oversized + prefix_len, 'A',
+                   sizeof(oversized) - prefix_len - 1);
+            oversized[sizeof(oversized) - 1] = '\\0';
+            assert(ssh_parse_record(oversized, &event) == -1);
+        }
     }
 
     return 0;
