@@ -30,7 +30,7 @@ static const struct scenario_info scenarios[] = {
     {BENCH_SOURCE_BRUTE_FORCE, "source_account_bruteforce"},
     {BENCH_SOURCE_SPRAY, "single_source_password_spray"},
     {BENCH_DISTRIBUTED_SPRAY, "distributed_password_spray"},
-    {BENCH_HIGH_CARDINALITY, "full_ring_unique_source_and_account"}
+    {BENCH_HIGH_CARDINALITY, "full_ring_unique_source_missing_username"}
 };
 
 static uint64_t
