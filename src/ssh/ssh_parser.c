@@ -345,6 +345,19 @@ classify_message(struct ssh_event *event, const char *message)
     } else if (strncmp(body, "Invalid user ", 13) == 0) {
         event->type = SSH_EVENT_INVALID_USER;
         extract_user_and_address(event, body + 13, " from ");
+    } else if (strncmp(body, "input_userauth_request: invalid user ", 37) == 0) {
+        const char *username = body + 37;
+        const char *username_end = username;
+        event->type = SSH_EVENT_INVALID_USER;
+        event->invalid_user = 1;
+        while (*username_end && !isspace((unsigned char)*username_end))
+            username_end++;
+        if (username_end > username &&
+            (size_t)(username_end - username) < sizeof(event->username)) {
+            copy_span(event->username, sizeof(event->username), username,
+                      (size_t)(username_end - username));
+            event->has_username = 1;
+        }
     } else if (strncmp(body, "Disconnecting:", 14) == 0) {
         event->type = SSH_EVENT_SERVER_DISCONNECT;
     } else if (strncmp(body, "Received disconnect from ", 25) == 0) {
@@ -454,6 +467,23 @@ classify_message(struct ssh_event *event, const char *message)
                           (size_t)(close_bracket - open_bracket - 1),
                           event->address, sizeof(event->address)))
             event->has_address = 1;
+    } else if (strncmp(body, "Address ", 8) == 0) {
+        static const char suffix[] =
+            "but this does not map back to the address - POSSIBLE BREAK-IN ATTEMPT!";
+        const char *address = body + 8;
+        const char *address_end = address;
+        while (*address_end && !isspace((unsigned char)*address_end))
+            address_end++;
+        if (strncmp(address_end, " maps to ", 9) == 0) {
+            const char *mapping = address_end + 9;
+            const char *suffix_pos = strstr(mapping, ", ");
+            if (suffix_pos && strcmp(suffix_pos + 2, suffix) == 0) {
+                event->type = SSH_EVENT_REVERSE_DNS_WARNING;
+                if (is_ip_address(address, (size_t)(address_end - address),
+                                  event->address, sizeof(event->address)))
+                    event->has_address = 1;
+            }
+        }
     } else if (strncmp(body, "Did not receive identification string from ", 43) == 0) {
         const char *address_start = body + 43;
         const char *address_end = address_start;
