@@ -1,6 +1,6 @@
 # SSHD Detection Design — FreeBSD-first
 
-Status: design baseline; implementation and operator validation pending.
+Status: initial source brute-force detector implemented; FreeBSD operator validation pending. Additional correlation families remain design work.
 
 This document defines the safety and data semantics required before AirBotz turns parsed SSHD records into detections. It does not enable PF actions, change the production configuration, or claim that the current parser is a complete OpenSSH grammar.
 
@@ -10,9 +10,9 @@ The current branch has:
 - a bounded, length-aware syslog/SSHD parser with explicit unknown events;
 - normalized event types for authentication, PAM, disconnects, sessions, transport/protocol errors and selected operational messages;
 - a production log tailer with partial-line handling, oversized-record discard, rename rotation and copytruncate recovery;
-- dispatch into the core, which currently writes normalized SSH event summaries to the AirBotz log.
+- dispatch into the core, which writes normalized SSH event summaries and invokes an observe-only source brute-force detector.
 
-The current core is an event logger, not yet an SSHD detection engine. Unknown events are currently ignored by the SSH callback. No SSH correlation, risk score, alert report or SSH-triggered PF response exists.
+The core now includes one bounded SSH detection rule: source brute force from explicit failed-password records. Unknown events are still ignored by the SSH callback. Password spraying, distributed targeting, invalid-account enumeration, success-after-failure, risk scoring and richer alert reporting are not implemented. No SSH-triggered PF response exists.
 
 The reader opens the configured log at EOF on daemon startup. It intentionally does not replay historical records. A deleted/missing path after startup is currently retried by the reader, but SSH source health and event-loss telemetry are not exposed as a complete status contract.
 
