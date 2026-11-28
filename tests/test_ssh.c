@@ -214,6 +214,12 @@ int main(void) {
         assert(ssh_parse_record(
             "Dec 10 06:55:46 LabSZ sshd[24200]: first line\nsecond line",
             &event) == -1);
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: first\rline",
+            &event) == -1);
+        assert(ssh_parse_record(
+            "Dec 10 06:55:46 LabSZ sshd[24200]: Failed password for root from 192.0.2.1 port 22 ssh2\r\n",
+            &event) == 0);
         {
             char oversized[1200];
             const char *prefix =
