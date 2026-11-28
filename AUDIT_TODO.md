@@ -167,3 +167,10 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` verified and closed.
 ### R4.1 integration compile correction — resolved
 
 The first FreeBSD build exposed that `include/ssh.h` still declared the legacy one-argument `ssh_init()` API and did not expose the normalized parser event types. Corrected `include/ssh.h` to include `ssh_parser.h`, define `ssh_event_handler`, and declare `ssh_init(path, handler, context)` (commit `3cccd88`). The operator then pulled the fix and verified a warning-free clean build, all non-root tests, the full root test suite including IPC, and a 61-second seeded parser fuzz campaign (6,688,150 executions, `FUZZ_EXIT=0`).
+
+### R5.3 — observed SSH protocol and operational message families [~]
+
+- [~] Added normalized event types for malformed protocol identification, invalid SSH packet length, corrupted MAC, server listener startup and syslogin logout error. The parser extracts a bounded protocol identification string, validated IPv4/IPv6 source/listener address and port where present, and a checked unsigned packet-length value. Malformed quoted identification and overflowing/zero packet lengths remain unknown.
+- [ ] Pending operator validation on FreeBSD 15.1: clean warning-free build, make test, sudo make test (root IPC), and seeded make fuzz-ssh.
+- [ ] After validation, review event semantics against additional OpenSSH versions and add any missing negative cases. These events are descriptive telemetry, not attack verdicts; no PF action or automatic blocking is connected.
+- Implementation commits: 82cbda1, 016e96e, 26816dc, 7e92804, f505ab2.
