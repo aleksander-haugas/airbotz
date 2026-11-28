@@ -478,7 +478,9 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
     distributed_before = normalized_username[0] != '\0' ?
         get_distributed_metrics(normalized_username) :
         (struct distributed_metrics){0, 0, 0};
-    distributed_spray_before = get_distributed_spray_metrics();
+    distributed_spray_before = normalized_username[0] != '\0' ?
+        get_distributed_spray_metrics() :
+        (struct distributed_spray_metrics){0, 0, 0, 0, 0};
 
     tail = (head + count) % SSH_DETECTION_CAPACITY;
     slot = &observations[tail];
@@ -507,8 +509,11 @@ ssh_detection_process_at(const struct ssh_event *event, uint64_t now_ns)
         }
     }
 
-    distributed_spray_after = get_distributed_spray_metrics();
-    if (!is_distributed_password_spray(&distributed_spray_before) &&
+    distributed_spray_after = normalized_username[0] != '\0' ?
+        get_distributed_spray_metrics() :
+        (struct distributed_spray_metrics){0, 0, 0, 0, 0};
+    if (normalized_username[0] != '\0' &&
+        !is_distributed_password_spray(&distributed_spray_before) &&
         is_distributed_password_spray(&distributed_spray_after)) {
         increment_saturated(&detection_stats.distributed_password_spray_findings);
         logger_log("SSH_DETECTION",
