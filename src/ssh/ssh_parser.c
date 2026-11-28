@@ -182,54 +182,93 @@ static void
 classify_message(struct ssh_event *event, const char *message)
 {
     const char *p;
+    const char *body = message;
 
-    if (strncmp(message, "Failed password for ", 20) == 0) {
+    if (strncmp(body, "error:", 6) == 0 &&
+        isspace((unsigned char)body[6])) {
+        event->severity = SSH_LOG_SEVERITY_ERROR;
+        body += 6;
+        while (*body && isspace((unsigned char)*body))
+            body++;
+    } else if (strncmp(body, "fatal:", 6) == 0 &&
+               isspace((unsigned char)body[6])) {
+        event->severity = SSH_LOG_SEVERITY_FATAL;
+        body += 6;
+        while (*body && isspace((unsigned char)*body))
+            body++;
+    }
+
+    if (strncmp(body, "Failed password for ", 20) == 0) {
         event->type = SSH_EVENT_FAILED_PASSWORD;
-        extract_user_and_address(event, message + 20, " from ");
-    } else if (strncmp(message, "Failed none for ", 16) == 0) {
+        extract_user_and_address(event, body + 20, " from ");
+    } else if (strncmp(body, "Failed none for ", 16) == 0) {
         event->type = SSH_EVENT_FAILED_NONE;
-        extract_user_and_address(event, message + 16, " from ");
-    } else if (strncmp(message, "Accepted password for ", 22) == 0) {
+        extract_user_and_address(event, body + 16, " from ");
+    } else if (strncmp(body, "Accepted password for ", 22) == 0) {
         event->type = SSH_EVENT_ACCEPTED_PASSWORD;
-        extract_user_and_address(event, message + 22, " from ");
-    } else if (strncmp(message, "Accepted publickey for ", 23) == 0) {
+        extract_user_and_address(event, body + 22, " from ");
+    } else if (strncmp(body, "Accepted publickey for ", 23) == 0) {
         event->type = SSH_EVENT_ACCEPTED_PUBLICKEY;
-        extract_user_and_address(event, message + 23, " from ");
-    } else if (strncmp(message, "Accepted keyboard-interactive for ", 34) == 0) {
+        extract_user_and_address(event, body + 23, " from ");
+    } else if (strncmp(body, "Accepted keyboard-interactive for ", 34) == 0) {
         event->type = SSH_EVENT_ACCEPTED_KEYBOARD_INTERACTIVE;
-        extract_user_and_address(event, message + 34, " from ");
-    } else if (strncmp(message, "Invalid user ", 13) == 0) {
+        extract_user_and_address(event, body + 34, " from ");
+    } else if (strncmp(body, "Invalid user ", 13) == 0) {
         event->type = SSH_EVENT_INVALID_USER;
-        extract_user_and_address(event, message + 13, " from ");
-    } else if (strncmp(message, "Disconnecting:", 14) == 0) {
+        extract_user_and_address(event, body + 13, " from ");
+    } else if (strncmp(body, "Disconnecting:", 14) == 0) {
         event->type = SSH_EVENT_SERVER_DISCONNECT;
-    } else if (strncmp(message, "Received disconnect from ", 25) == 0) {
-        event->type = SSH_EVENT_RECEIVED_DISCONNECT;
+    } else if (strncmp(body, "Received disconnect from ", 25) == 0) {
         const char *address_end;
-        p = message + 25;
+        event->type = SSH_EVENT_RECEIVED_DISCONNECT;
+        p = body + 25;
         address_end = strstr(p, ": ");
         if (address_end &&
             is_ip_address(p, (size_t)(address_end - p),
                           event->address, sizeof(event->address)))
             event->has_address = 1;
-    } else if (strncmp(message, "Disconnecting:", 14) == 0) {
-        event->type = SSH_EVENT_SERVER_DISCONNECT;
-    } else if (strstr(message, "authentication failure") != NULL) {
+    } else if (strstr(body, "pam_unix(sshd:auth): check pass;") != NULL) {
+        event->type = SSH_EVENT_PAM_CHECK_PASS;
+    } else if (strncmp(body, "PAM ", 4) == 0 &&
+               strstr(body, " more authentication failures;") != NULL) {
+        event->type = SSH_EVENT_PAM_FAILURE_SUMMARY;
+    } else if (strncmp(body, "PAM service(sshd) ignoring max retries;", 39) == 0) {
+        event->type = SSH_EVENT_PAM_MAX_RETRIES;
+    } else if (strstr(body, "authentication failure") != NULL) {
         event->type = SSH_EVENT_PAM_AUTH_FAILURE;
-        p = strstr(message, "rhost=");
+        p = strstr(body, "rhost=");
         if (p) {
             p += 6;
-            if (is_ip_address(p, strcspn(p, " \t;"),
+            if (is_ip_address(p, strcspn(p, " \\t;"),
                               event->address, sizeof(event->address)))
                 event->has_address = 1;
         }
-    } else if (strncmp(message, "Connection closed", 17) == 0 ||
-               strncmp(message, "Disconnected from", 18) == 0) {
+    } else if (strncmp(body, "reverse mapping checking getaddrinfo for ", 41) == 0) {
+        const char *open_bracket = strchr(body, '[');
+        const char *close_bracket = open_bracket ? strchr(open_bracket + 1, ']') : NULL;
+        event->type = SSH_EVENT_REVERSE_DNS_WARNING;
+        if (open_bracket && close_bracket &&
+            is_ip_address(open_bracket + 1,
+                          (size_t)(close_bracket - open_bracket - 1),
+                          event->address, sizeof(event->address)))
+            event->has_address = 1;
+    } else if (strncmp(body, "Did not receive identification string from ", 42) == 0) {
+        const char *address_start = body + 42;
+        const char *address_end = address_start;
+        event->type = SSH_EVENT_IDENTIFICATION_MISSING;
+        while (*address_end && !isspace((unsigned char)*address_end))
+            address_end++;
+        if (is_ip_address(address_start,
+                          (size_t)(address_end - address_start),
+                          event->address, sizeof(event->address)))
+            event->has_address = 1;
+    } else if (strncmp(body, "Connection closed", 17) == 0 ||
+               strncmp(body, "Disconnected from", 18) == 0) {
         event->type = SSH_EVENT_CONNECTION_CLOSED;
-        if (ssh_extract_address(message, event->address,
+        if (ssh_extract_address(body, event->address,
                                 sizeof(event->address)))
             event->has_address = 1;
-    } else if ((p = strstr(message, "session opened for user ")) != NULL) {
+    } else if ((p = strstr(body, "session opened for user ")) != NULL) {
         const char *u = p + 24;
         const char *e = u;
         event->type = SSH_EVENT_SESSION_OPENED;
@@ -238,7 +277,7 @@ classify_message(struct ssh_event *event, const char *message)
         copy_span(event->username, sizeof(event->username), u,
                   (size_t)(e - u));
         event->has_username = (e != u);
-    } else if ((p = strstr(message, "session closed for user ")) != NULL) {
+    } else if ((p = strstr(body, "session closed for user ")) != NULL) {
         const char *u = p + 24;
         const char *e = u;
         event->type = SSH_EVENT_SESSION_CLOSED;
@@ -247,6 +286,10 @@ classify_message(struct ssh_event *event, const char *message)
         copy_span(event->username, sizeof(event->username), u,
                   (size_t)(e - u));
         event->has_username = (e != u);
+    } else if (event->severity == SSH_LOG_SEVERITY_FATAL) {
+        event->type = SSH_EVENT_SSHD_FATAL;
+    } else if (event->severity == SSH_LOG_SEVERITY_ERROR) {
+        event->type = SSH_EVENT_SSHD_ERROR;
     }
 }
 
