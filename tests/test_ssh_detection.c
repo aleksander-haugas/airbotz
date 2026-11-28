@@ -75,7 +75,7 @@ main(void)
         ssh_detection_process_at(&event, (uint64_t)(10 + i) * SECOND);
     }
     assert(count_findings(path) == 0);
-    event = failure("192.0.2.10", "test");
+    event = failure("192.0.2.10", "root");
     ssh_detection_process_at(&event, 17 * SECOND);
     assert(count_findings(path) == 1);
     ssh_detection_process_at(&event, 18 * SECOND);
