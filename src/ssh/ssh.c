@@ -1,5 +1,6 @@
 #include "ssh.h"
 #include "logger.h"
+#include "ssh_parser.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -8,9 +9,9 @@
 #include <arpa/inet.h>
 #include <stdio.h>
 
-#define LINE_MAX_AB 4096
 #define SSH_PATH_MAX 512
 #define SSH_TAIL_SIZE 128
+#define SSH_RECORD_MAX 4096
 
 int ssh_extract_address(const char *, char *, size_t);
 const char *ssh_classify(const char *);
@@ -20,22 +21,71 @@ static char log_path[SSH_PATH_MAX];
 static unsigned char tail_snapshot[SSH_TAIL_SIZE];
 static size_t tail_length;
 static off_t tail_offset;
+static ssh_event_handler event_handler;
+static void *event_context;
+static unsigned char record_buffer[SSH_RECORD_MAX];
+static size_t record_length;
+static int dropping_record;
 
+static void
+dispatch_record(const unsigned char *record, size_t length)
+{
+    struct ssh_event event;
+
+    if (ssh_parse_record_n(record, length, &event) != 0)
+        return;
+
+    if (event_handler)
+        event_handler(&event, event_context);
+}
+
+static void
+reset_record_buffer(void)
+{
+    record_length = 0;
+    dropping_record = 0;
+}
+
+static void
+dispatch_pending_record(void)
+{
+    if (!dropping_record && record_length != 0)
+        dispatch_record(record_buffer, record_length);
+    else if (dropping_record)
+        logger_log("WARN", "SSH log record exceeded parser limit; discarded");
+    reset_record_buffer();
+}
+
+/*
+ * Consume complete newline-delimited records only. A partial final line is
+ * retained across polls and is flushed only when the file is rotated or the
+ * reader shuts down. Oversized records are discarded through their newline,
+ * preventing their suffix from being misinterpreted as a new syslog record.
+ */
 static void
 process_available(void)
 {
-    char line[LINE_MAX_AB], ip[INET6_ADDRSTRLEN];
+    int ch;
 
     clearerr(logf);
-    while (fgets(line, sizeof(line), logf)) {
-        const char *kind = ssh_classify(line);
-
-        if (strcmp(kind, "other") != 0) {
-            if (ssh_extract_address(line, ip, sizeof(ip)))
-                logger_log("SSH", "%s from %s", kind, ip);
-            else
-                logger_log("SSH", "%s (address unavailable)", kind);
+    while ((ch = fgetc(logf)) != EOF) {
+        if (ch == '\n') {
+            if (!dropping_record && record_length != 0)
+                dispatch_record(record_buffer, record_length);
+            else if (dropping_record)
+                logger_log("WARN", "SSH log record exceeded parser limit; discarded");
+            reset_record_buffer();
+            continue;
         }
+
+        if (dropping_record)
+            continue;
+        if (record_length == sizeof(record_buffer)) {
+            dropping_record = 1;
+            record_length = 0;
+            continue;
+        }
+        record_buffer[record_length++] = (unsigned char)ch;
     }
 
     if (ferror(logf)) {
@@ -78,7 +128,7 @@ tail_snapshot_changed(void)
 }
 
 int
-ssh_init(const char *path)
+ssh_init(const char *path, ssh_event_handler handler, void *context)
 {
     FILE *new_log;
 
@@ -98,6 +148,9 @@ ssh_init(const char *path)
     if (logf)
         fclose(logf);
     logf = new_log;
+    event_handler = handler;
+    event_context = context;
+    reset_record_buffer();
     (void)snprintf(log_path, sizeof(log_path), "%s", path);
     tail_length = 0;
     save_tail_snapshot();
@@ -123,8 +176,10 @@ refresh_log_file(void)
         if (!new_log)
             return;
         process_available();
+        dispatch_pending_record();
         fclose(logf);
         logf = new_log;
+        reset_record_buffer();
         tail_length = 0;
         logger_log("INFO", "SSH log rotated; following new file");
         return;
@@ -138,6 +193,7 @@ refresh_log_file(void)
     if (path_stat.st_size < position || tail_snapshot_changed()) {
         clearerr(logf);
         if (fseeko(logf, 0, SEEK_SET) == 0) {
+            reset_record_buffer();
             tail_length = 0;
             logger_log("INFO", "SSH log rewritten or truncated; reading from beginning");
         }
@@ -158,9 +214,15 @@ ssh_process(void)
 void
 ssh_shutdown(void)
 {
-    if (logf)
+    if (logf) {
+        process_available();
+        dispatch_pending_record();
         fclose(logf);
+    }
     logf = NULL;
+    event_handler = NULL;
+    event_context = NULL;
+    reset_record_buffer();
     log_path[0] = '\0';
     tail_length = 0;
 }
