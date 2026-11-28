@@ -538,3 +538,22 @@ The first parser implementation is being extended against the observed third-cor
 Synthetic regression cases use documentation-only TEST-NET IPv4/IPv6 addresses. The raw `message` field retains the original severity prefix while the event type is determined from the message body. The taxonomy is an initial vertical slice; reason codes/text, transport operation/cause, pre-authentication phase, protocol negotiation, and strict RFC3164/RFC5424 envelope support remain future work.
 
 The expanded taxonomy and tests are committed but have not yet been validated by the operator on FreeBSD. Do not mark R3/R4 complete until the updated branch passes a clean build and test run, followed by broader malformed-input and fuzz coverage.
+
+
+### 15.1 Strict syslog envelope validation
+
+The parser's first envelope implementation accepted only the traditional yearless RFC3164-like form used by the current samples:
+
+`Mon DD HH:MM:SS hostname sshd[PID]: message`
+
+and the corresponding `sshd-session[PID]:` process name. A hardening pass now validates the envelope before classification:
+
+- Month must exactly match one of the twelve English three-letter month names.
+- Day must be numeric and within the month-specific range. February 29 is accepted because the syslog envelope omits the year; February 30 and 31 are rejected.
+- Time must be exactly `HH:MM:SS`, with hour 00–23 and minute/second 00–59.
+- Hostname must be non-empty and fit the fixed event buffer; it is not silently truncated.
+- Process token must have exact `sshd[decimal-PID]:` or `sshd-session[decimal-PID]:` syntax. PID must be non-zero decimal and fit the PID field / signed 32-bit process-ID range.
+- Message body must be non-empty and fit the fixed message buffer. Overlong bodies are rejected rather than silently truncated. Embedded CR/LF inside the message is rejected; a normal terminal LF or CRLF is stripped.
+- The parser retains the raw yearless timestamp text; it does not invent a year or timezone.
+
+Synthetic regression tests cover invalid month/day/time/PID/process syntax, month-specific day limits, leap-day acceptance, embedded line breaks and oversized message bodies. This remains a deliberately narrow RFC3164-like parser, not full RFC3164/RFC5424 support. Hostname character grammar, syslog priority/version headers, timezone/year handling and fuzz testing remain open. The hardening commit is awaiting operator validation on FreeBSD.
