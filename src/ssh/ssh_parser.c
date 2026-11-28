@@ -183,11 +183,52 @@ extract_user_and_address(struct ssh_event *event, const char *text,
     }
 }
 
+static int
+classify_transport(struct ssh_event *event, const char *body)
+{
+    if (strncmp(body, "Read from socket failed:", 24) == 0) {
+        event->transport_operation = SSH_TRANSPORT_OP_READ;
+    } else if (strncmp(body, "Write failed:", 13) == 0) {
+        event->transport_operation = SSH_TRANSPORT_OP_WRITE;
+    } else if (strncmp(body, "Did not receive identification string", 38) == 0) {
+        event->transport_operation = SSH_TRANSPORT_OP_IDENTIFICATION;
+    } else if (strstr(body, "kex_exchange_identification") != NULL) {
+        event->transport_operation = SSH_TRANSPORT_OP_KEY_EXCHANGE;
+    } else if (strstr(body, "Unable to negotiate") != NULL ||
+               strstr(body, "no matching ") != NULL) {
+        event->transport_operation = SSH_TRANSPORT_OP_NEGOTIATION;
+    }
+
+    if (strstr(body, "Connection reset by peer") != NULL ||
+        strstr(body, "Connection reset") != NULL) {
+        event->transport_cause = SSH_TRANSPORT_CAUSE_CONNECTION_RESET;
+    } else if (strstr(body, "Connection timed out") != NULL ||
+               strstr(body, "Operation timed out") != NULL ||
+               strstr(body, "timeout") != NULL) {
+        event->transport_cause = SSH_TRANSPORT_CAUSE_TIMEOUT;
+    } else if (strstr(body, "Broken pipe") != NULL) {
+        event->transport_cause = SSH_TRANSPORT_CAUSE_BROKEN_PIPE;
+    } else if (strstr(body, "End of file") != NULL ||
+               strstr(body, "unexpected EOF") != NULL) {
+        event->transport_cause = SSH_TRANSPORT_CAUSE_EOF;
+    }
+
+    if (event->transport_operation != SSH_TRANSPORT_OP_UNKNOWN ||
+        event->transport_cause != SSH_TRANSPORT_CAUSE_UNKNOWN) {
+        event->type = SSH_EVENT_TRANSPORT_ERROR;
+        return 1;
+    }
+    return 0;
+}
+
 static void
 classify_message(struct ssh_event *event, const char *message)
 {
     const char *p;
     const char *body = message;
+
+    if (strstr(message, "[preauth]") != NULL)
+        event->auth_phase = SSH_AUTH_PHASE_PREAUTH;
 
     if (strncmp(body, "error:", 6) == 0 &&
         isspace((unsigned char)body[6])) {
@@ -202,6 +243,9 @@ classify_message(struct ssh_event *event, const char *message)
         while (*body && isspace((unsigned char)*body))
             body++;
     }
+
+    if (classify_transport(event, body))
+        return;
 
     if (strncmp(body, "Failed password for ", 20) == 0) {
         event->type = SSH_EVENT_FAILED_PASSWORD;
