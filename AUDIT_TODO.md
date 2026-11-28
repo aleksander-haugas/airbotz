@@ -179,3 +179,10 @@ The first FreeBSD build exposed that `include/ssh.h` still declared the legacy o
 - [x] Operator validated on FreeBSD 15.1: the preceding clean production build completed without warnings; after the test-only expectation correction in commit `3b0e9b1`, `make test` and `sudo make test` passed, including root-only IPC. Seeded `make fuzz-ssh` completed 7,391,561 executions in 61 seconds with `FUZZ_EXIT=0`; no crash or sanitizer report appeared in the supplied output.
 - [~] Review event semantics against additional OpenSSH versions and add any missing negative cases. These events are descriptive telemetry, not attack verdicts; no PF action or automatic blocking is connected.
 - Implementation commits: 82cbda1, 016e96e, 26816dc, 7e92804, f505ab2; stale test expectation correction: 3b0e9b1.
+
+
+### R6 performance audit — source/account aggregation reuse validation
+
+- Operator validated code commit `bbdda38` on FreeBSD 15.1: clean build, `make test`, and `sudo make test` all passed, including root-only IPC. All five benchmark scenarios retained their expected finding counters.
+- The build emitted three `-Wmissing-field-initializers` warnings for the newly added `target_account_attempts` field. Follow-up code commit `9a61161` explicitly initializes all four `spray_metrics` fields; warning-free rebuild and full test rerun remain pending.
+- Across the two benchmark invocations (10 samples per scenario), combined medians were 219 ns/event (mixed normal), 456144 ns/event (source/account brute force), 406158.5 ns/event (single-source spray), 351300.5 ns/event (distributed spray), and 346.5 ns/event (full-ring missing-username). The brute-force median is slower than the previous two-run medians of 403634 and 431603 ns/event; spray measurements remain variable. This optimization is functionally validated but has not demonstrated a performance improvement. Keep R6 performance audit open; no production capacity claim or PF action.
